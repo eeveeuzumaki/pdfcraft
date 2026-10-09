@@ -1,0 +1,103 @@
+# Cloud-only macOS preview builds. These are ad-hoc signed, NOT notarized or public releases.
+# The standard runners are used to avoid the upstream release workflow's larger runner.
+name: macOS Preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/macos-preview.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: macOS ${{ matrix.label }} preview
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: "Apple Silicon"
+            runner: macos-15
+            arch: aarch64
+            target: aarch64-apple-darwin
+          - label: "Intel"
+            runner: macos-15-intel
+            arch: x86_64
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      MACOS_SIGN_IDENTITY: "-"
+      CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+      CRAFT_FONTS_REQUIRED: "1"
+      # Keep release-build memory use conservative on standard hosted runners.
+      CARGO_BUILD_JOBS: "2"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Check out optional fonts at upstream's pinned commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: storytold/craft-fonts
+          ref: abb83316d96aa59c1cf64784289e378fe9fa5695
+          path: craft-fonts
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-preview-${{ matrix.arch }}
+
+      - name: Build macOS app, ad-hoc sign, and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Host architecture: $(uname -m)"
+          echo "Requested build target: ${{ matrix.target }}"
+          rustc --version
+          cargo --version
+          # The repository's existing macOS packaging script builds PdfCraft.app,
+          # validates the bundle, creates its DMG and a CLI ZIP, and smoke-tests the CLI.
+          # Without a Developer ID identity the script signs ad-hoc, NOT notarized.
+          bash packaging/macos/package.sh --arch "${{ matrix.arch }}"
+
+      - name: Check packaged files and record checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -lh dist/release/
+          test "$(find dist/release -name '*.dmg' | wc -l | xargs)" -eq 1
+          test "$(find dist/release -name '*.zip' | wc -l | xargs)" -eq 1
+          cd dist/release
+          shasum -a 256 * > SHA256SUMS.txt
+          {
+            echo "### macOS ${{ matrix.label }} preview"
+            echo "Build and packaging script succeeded."
+            echo "Ad-hoc signed; **not Apple notarized**. Use only for personal evaluation."
+            echo "Check the 'Artifacts' section of this workflow run for the DMG and CLI ZIP."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload DMG, command-line ZIP, and checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdfcraft-macos-${{ matrix.arch }}-preview
+          path: |
+            dist/release/*.dmg
+            dist/release/*.zip
+            dist/release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
