@@ -1,0 +1,96 @@
+# Builds an unsigned Windows x64 ZIP for testing the fork without local installation.
+# Not a public release; modified distributions must comply with docs/brand/LICENSE-brand.txt.
+name: Windows Portable Preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/windows-portable-preview.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-portable-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Windows x64 portable ZIP
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: pdfcraft-portable-preview-x64
+
+      - name: Compile Windows desktop and CLI executables
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Scope CRT static linkage to the Windows target (not build scripts).
+          $env:CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS = '-C target-feature=+crt-static'
+          # Fail if the Windows executable's normal resources cannot be embedded.
+          $env:PDFCRAFT_REQUIRE_WINRES = '1'
+          cargo build --locked --release -p pdfcraft -p pdfcraft-cli --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { throw 'Windows Rust build failed' }
+
+      - name: Check executable and package portable ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bin = Join-Path $PWD 'target\x86_64-pc-windows-msvc\release'
+          $stage = Join-Path $PWD 'dist\PdfCraft-portable-preview'
+          $zip = Join-Path $PWD 'dist\pdfcraft-windows-x64-portable-preview.zip'
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+          foreach ($filename in @('pdfcraft.exe', 'pdfcraft-cli.exe')) {
+            $source = Join-Path $bin $filename
+            if (-not (Test-Path $source)) { throw "Missing Windows executable: $filename" }
+            Copy-Item $source $stage
+          }
+
+          Copy-Item 'packaging/windows/portable.txt' $stage
+          foreach ($filename in @('README.md', 'LICENSE-MIT', 'LICENSE-APACHE', 'ATTRIBUTION.md', 'NOTICE')) {
+            if (Test-Path $filename) { Copy-Item $filename $stage }
+          }
+
+          @'
+          PdfCraft Windows x64 portable preview
+          -------------------------------------
+          This is an unsigned development preview compiled from the GitHub fork.
+          It has not been independently tested on a user's Windows desktop.
+
+          For testing on your own computer: extract the ZIP, then open pdfcraft.exe.
+          Keep portable.txt beside the executable. This stores settings and logs
+          in a PdfCraftData folder alongside the executable.
+
+          This is not a published release. Do not redistribute an altered build
+          without complying with all source-code, asset, and branding licenses.
+          The ArtCraft names and logos are not open-source assets.
+          '@ | Set-Content (Join-Path $stage 'PREVIEW-NOTICE.txt')
+
+          & (Join-Path $stage 'pdfcraft-cli.exe') --version
+          if ($LASTEXITCODE -ne 0) { throw 'CLI smoke test failed' }
+
+          Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal -Force
+          if (-not (Test-Path $zip)) { throw 'ZIP packaging failed' }
+          Write-Output ("Portable ZIP size: {0:N1} MiB" -f ((Get-Item $zip).Length / 1MB))
+          "### Windows portable preview" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          "Build and CLI version check succeeded. Download the artifact from this Actions run. It is **unsigned** and for evaluation, not public distribution." | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdfcraft-windows-x64-portable-preview
+          path: dist/pdfcraft-windows-x64-portable-preview.zip
+          if-no-files-found: error
+          retention-days: 30
