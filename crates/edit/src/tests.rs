@@ -923,7 +923,7 @@ fn non_finite_text_formatting_rejects_without_modifying_the_pdf() {
     ];
     for style in bad_styles {
         let error = text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap_err();
-        assert!(matches!(error, EditError::Invalid(_)), "{style:?}: {error:?}");
+        assert!(matches!(&error, EditError::Invalid(_)), "{style:?}: {error:?}");
         assert_eq!(page_content_bytes(&doc, 0), original, "{style:?} changed the page");
         assert!(!doc.is_modified(), "{style:?} left the document dirty");
     }
