@@ -485,6 +485,63 @@ fn mixed_font_runs_are_not_merged_into_one_source_style() {
     assert_ne!(lines[0].font, lines[1].font);
 }
 
+/// An unchanged edit is not an invitation to re-encode font subset glyphs,
+/// collapse kerning, or replace PDF operators. Keep the original bytes intact.
+#[test]
+fn unchanged_line_edit_preserves_subset_font_and_kerning() {
+    let mut doc = text_page("BT /F2 12 Tf 72 700 Td [(a) -35 (b)] TJ ET");
+    let before = page_content_bytes(&doc, 0);
+    let line = text::text_lines(&doc, 0).unwrap().remove(0);
+    assert_eq!(line.font, "F2");
+    assert_eq!(line.base_font, "ABCDEF+Arial");
+    assert_eq!(line.text, "ab");
+
+    let edit = text::replace_line(&mut doc, 0, 0, &line.text).unwrap();
+    assert_eq!(edit.substituted, None);
+    assert!(!doc.is_modified(), "unchanged line must not dirty the PDF");
+    assert_eq!(page_content_bytes(&doc, 0), before, "kerning and original subset bytes changed");
+    let after = text::text_lines(&doc, 0).unwrap().remove(0);
+    assert_eq!((after.font, after.base_font, after.text), (line.font, line.base_font, line.text));
+
+    // An actual edit still uses the usual font-substitution rules.
+    let actual = text::replace_line(&mut doc, 0, 0, "abc").unwrap();
+    assert_eq!(actual.substituted.as_deref(), Some("Helvetica"));
+    assert_eq!(text::text_lines(&reopen(&doc), 0).unwrap()[0].text, "abc");
+}
+
+#[test]
+fn unchanged_paragraph_edit_preserves_original_layout_and_font() {
+    let mut doc = text_page("BT /F2 12 Tf 14 TL 72 700 Td (ab) Tj T* (ab) Tj ET");
+    let before = page_content_bytes(&doc, 0);
+    let blocks = text::text_blocks(&doc, 0).unwrap();
+    assert_eq!(blocks.len(), 1);
+    assert_eq!(blocks[0].text, "ab ab");
+    let font_before = text::text_lines(&doc, 0).unwrap()[0].font.clone();
+
+    for edit in [Some("ab ab"), None] {
+        let result = text::rewrite_block(&mut doc, 0, 0, edit, &text::BlockStyle::default()).unwrap();
+        assert_eq!(result.substituted, None);
+        assert!(!doc.is_modified(), "unchanged paragraph must not dirty the PDF");
+        assert_eq!(page_content_bytes(&doc, 0), before);
+    }
+    let result = text::replace_block(&mut doc, 0, 0, "ab ab").unwrap();
+    assert_eq!(result.substituted, None);
+    assert_eq!(text::text_lines(&doc, 0).unwrap()[0].font, font_before);
+    assert_eq!(page_content_bytes(&doc, 0), before);
+
+    // The same words with an explicit style change must still be editable.
+    text::rewrite_block(
+        &mut doc,
+        0,
+        0,
+        None,
+        &text::BlockStyle { family: Some((added::Family::Times, true, false)), ..Default::default() },
+    )
+    .unwrap();
+    assert!(doc.is_modified());
+    assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].base_font, "Times-Bold");
+}
+
 #[test]
 fn missing_glyphs_preserve_source_style_in_fallback() {
     let mut doc = descriptor_text_page();
