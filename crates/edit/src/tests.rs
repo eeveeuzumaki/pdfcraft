@@ -901,6 +901,37 @@ fn a_line_drawn_twice_is_replaced_everywhere() {
     assert_eq!(lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), ["Hello there", "world"]);
 }
 
+/// Untrusted automation values must not be serialized as NaN or infinity into a
+/// page's text/colour operators. A rejected edit must leave the PDF untouched.
+#[test]
+fn non_finite_text_formatting_rejects_without_modifying_the_pdf() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Original text) Tj ET");
+    let original = page_content_bytes(&doc, 0);
+    let bad_styles = [
+        text::BlockStyle { size: Some(f64::NAN), ..Default::default() },
+        text::BlockStyle { size: Some(f64::INFINITY), ..Default::default() },
+        text::BlockStyle { line_spacing: Some(f64::NAN), ..Default::default() },
+        text::BlockStyle { line_spacing: Some(f64::INFINITY), ..Default::default() },
+        text::BlockStyle { char_spacing: Some(f64::NAN), ..Default::default() },
+        text::BlockStyle { char_spacing: Some(f64::NEG_INFINITY), ..Default::default() },
+        text::BlockStyle { scale: Some(f64::NAN), ..Default::default() },
+        text::BlockStyle { scale: Some(f64::INFINITY), ..Default::default() },
+        text::BlockStyle { color: Some([0.0, f64::NAN, 0.0]), ..Default::default() },
+        text::BlockStyle { color: Some([f64::INFINITY, 0.0, 0.0]), ..Default::default() },
+        text::BlockStyle { offset: Some([0.0, f64::NAN]), ..Default::default() },
+        text::BlockStyle { width: Some(f64::NEG_INFINITY), ..Default::default() },
+    ];
+    for style in bad_styles {
+        let error = text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap_err();
+        assert!(matches!(&error, EditError::Invalid(_)), "{style:?}: {error:?}");
+        assert_eq!(page_content_bytes(&doc, 0), original, "{style:?} changed the page");
+        assert!(!doc.is_modified(), "{style:?} left the document dirty");
+    }
+    // A valid edit after rejected attempts still works and survives a save.
+    text::rewrite_block(&mut doc, 0, 0, Some("Updated text"), &text::BlockStyle::default()).unwrap();
+    assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].text, "Updated text");
+}
+
 #[test]
 fn paragraphs_move_and_rewrap_to_a_new_width() {
     let para = "BT /F1 10 Tf 12 TL 100 700 Td (One two three four five six seven) Tj T* (eight nine ten eleven twelve) Tj ET";
