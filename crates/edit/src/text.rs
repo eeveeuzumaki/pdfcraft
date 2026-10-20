@@ -195,6 +195,43 @@ fn splice(data: &[u8], ops: &[Op], mut edit: impl FnMut(usize) -> (Vec<Op>, bool
     out
 }
 
+/// Apply an edit to its source stream and remove overlapping copies in any other page
+/// streams. PDF pages may draw a text run repeatedly (for fake bold or searchable
+/// overlays); changing only the first stream leaves the original words visible.
+fn edit_page_streams(
+    doc: &mut Document,
+    streams: &[(Object, Vec<u8>)],
+    drop: &HashMap<usize, std::collections::HashSet<usize>>,
+    target_stream: usize,
+    insert_at: usize,
+    mut replacement: Vec<Op>,
+) -> Vec<Object> {
+    streams
+        .iter()
+        .enumerate()
+        .map(|(stream, (original, bytes))| {
+            if stream != target_stream && !drop.contains_key(&stream) {
+                return original.clone();
+            }
+            let ops = parse(bytes).ops;
+            let rewritten = splice(bytes, &ops, |i| {
+                let insert = if stream == target_stream && i == insert_at {
+                    std::mem::take(&mut replacement)
+                } else {
+                    Vec::new()
+                };
+                (insert, drop.get(&stream).is_none_or(|indices| !indices.contains(&i)))
+            });
+            let mut dict = match &*doc.resolve(original) {
+                Object::Stream(s) => s.dict.clone(),
+                _ => Dict::new(),
+            };
+            dict.remove(b"Length");
+            Object::Ref(doc.add(Object::Stream(Stream::flate(dict, &rewritten))))
+        })
+        .collect()
+}
+
 fn page_dict(doc: &Document, page: usize) -> Result<pdfcraft_model::Page, EditError> {
     pdfcraft_model::pages(doc).into_iter().nth(page).ok_or(EditError::NoSuchPage(page))
 }
@@ -659,7 +696,7 @@ pub fn replace_line(doc: &mut Document, page: usize, line: usize, text: &str) ->
     let mut res = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     let mut fonts_res = res.get(b"Font").map(|f| doc.resolve(f)).and_then(|f| f.as_dict().cloned()).unwrap_or_default();
     let streams = content_streams(doc, &p.dict);
-    let (stream_obj, data) = streams.get(target.stream).cloned().ok_or_else(|| EditError::Invalid("the page's content changed".into()))?;
+    let (_, data) = streams.get(target.stream).cloned().ok_or_else(|| EditError::Invalid("the page's content changed".into()))?;
     let ops = parse(&data).ops;
     let first = target.ops[0];
     // The line's own font, when it can show every character.
@@ -717,16 +754,7 @@ pub fn replace_line(doc: &mut Document, page: usize, line: usize, text: &str) ->
     // Rebuild: the line's first operator becomes the replacement, its others go. Copies of the
     // line drawn in the same area go too, so the replacement is all that shows.
     let drops = coincident_ops(&lines, std::slice::from_ref(&target.rect));
-    let new_data = splice(&data, &ops, |i| {
-        if i == first { (std::mem::take(&mut replacement), false) } else { (Vec::new(), !drops.get(&target.stream).is_some_and(|d| d.contains(&i))) }
-    });
-    let mut dict = match &*doc.resolve(&stream_obj) {
-        Object::Stream(s) => s.dict.clone(),
-        _ => Dict::new(),
-    };
-    dict.remove(b"Length");
-    let new = doc.add(Object::Stream(Stream::flate(dict, &new_data)));
-    let contents: Vec<Object> = streams.iter().enumerate().map(|(i, (o, _))| if i == target.stream { Object::Ref(new) } else { o.clone() }).collect();
+    let contents = edit_page_streams(doc, &streams, &drops, target.stream, first, replacement);
     let page_ref = p.obj;
     if substituted.is_some() {
         res.set(b"Font".to_vec(), Object::Dict(fonts_res));
@@ -899,7 +927,7 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
     let mut res = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     let mut fonts_res = res.get(b"Font").map(|f| doc.resolve(f)).and_then(|f| f.as_dict().cloned()).unwrap_or_default();
     let streams = content_streams(doc, &p.dict);
-    let (stream_obj, data) = streams.get(first.stream).cloned().ok_or_else(|| EditError::Invalid("the page's content changed".into()))?;
+    let (_, data) = streams.get(first.stream).cloned().ok_or_else(|| EditError::Invalid("the page's content changed".into()))?;
     let ops = parse(&data).ops;
     let text = text.unwrap_or(&b.text).split(paragraph_separator).filter(|word| !word.is_empty()).collect::<Vec<_>>().join(" ");
     let o = &first.origin;
@@ -1102,17 +1130,7 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
         block_ops.push(Op::new("Tm", o.tlm.iter().map(|v| n(*v)).collect()));
     }
     let at = if split { start } else { o.bt_op };
-    let new_data = splice(&data, &ops, |i| {
-        let insert = if i == at { std::mem::take(&mut block_ops) } else { Vec::new() };
-        (insert, drop.get(&first.stream).is_none_or(|d| !d.contains(&i)))
-    });
-    let mut dict = match &*doc.resolve(&stream_obj) {
-        Object::Stream(s) => s.dict.clone(),
-        _ => Dict::new(),
-    };
-    dict.remove(b"Length");
-    let new = doc.add(Object::Stream(Stream::flate(dict, &new_data)));
-    let contents: Vec<Object> = streams.iter().enumerate().map(|(i, (o, _))| if i == first.stream { Object::Ref(new) } else { o.clone() }).collect();
+    let contents = edit_page_streams(doc, &streams, &drop, first.stream, at, block_ops);
     if new_font {
         res.set(b"Font".to_vec(), Object::Dict(fonts_res));
     }
