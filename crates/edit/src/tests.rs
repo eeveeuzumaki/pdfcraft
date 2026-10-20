@@ -535,6 +535,41 @@ fn unchanged_paragraph_edit_preserves_original_layout_and_font() {
     assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].base_font, "Times-Bold");
 }
 
+/// Editing one of two fonts on the same line must leave the other font and
+/// its position untouched after save/reopen.
+#[test]
+fn mixed_font_edit_keeps_neighbouring_run_intact() {
+    let src = "BT /F1 12 Tf 72 700 Td (Regular) Tj /F2 12 Tf 180 0 Td (ab) Tj ET";
+    let mut doc = text_page(src);
+    let before = text::text_lines(&doc, 0).unwrap();
+    assert_eq!(before.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), ["Regular", "ab"]);
+    assert_eq!((before[0].font.as_str(), before[1].font.as_str()), ("F1", "F2"));
+    let original_subset = before[1].clone();
+    assert_eq!(text::replace_line(&mut doc, 0, 0, "Revised").unwrap().substituted, None);
+    let saved = reopen(&doc);
+    let after = text::text_lines(&saved, 0).unwrap();
+    assert_eq!(after.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), ["Revised", "ab"]);
+    assert_eq!(after[1].font, original_subset.font);
+    assert_eq!(after[1].base_font, original_subset.base_font);
+    assert_eq!(after[1].rect, original_subset.rect);
+}
+
+/// Characters already present in a subset should use their original font;
+/// unrelated text must not be modified when the edited subset is saved.
+#[test]
+fn mixed_font_subset_reuses_embedded_face_on_change() {
+    let src = "BT /F1 12 Tf 72 700 Td (Regular) Tj /F2 12 Tf 180 0 Td (ab) Tj ET";
+    let mut doc = text_page(src);
+    let original_regular = text::text_lines(&doc, 0).unwrap()[0].clone();
+    assert_eq!(text::replace_line(&mut doc, 0, 1, "ba").unwrap().substituted, None);
+    let saved = reopen(&doc);
+    let after = text::text_lines(&saved, 0).unwrap();
+    assert_eq!(after.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), ["Regular", "ba"]);
+    assert_eq!((after[1].font.as_str(), after[1].base_font.as_str()), ("F2", "ABCDEF+Arial"));
+    assert_eq!(after[0].font, original_regular.font);
+    assert_eq!(after[0].rect, original_regular.rect);
+}
+
 #[test]
 fn missing_glyphs_preserve_source_style_in_fallback() {
     let mut doc = descriptor_text_page();
