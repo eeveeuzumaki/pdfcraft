@@ -914,6 +914,15 @@ pub struct BlockStyle {
 
 /// Rewrite paragraph `block` with new text (or its own) and formatting, rewrapped to its width.
 pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option<&str>, style: &BlockStyle) -> Result<LineEdit, EditError> {
+    // Formatting may come from untrusted automation input. Reject NaN/infinity before
+    // touching the PDF: serializing a non-finite operand can corrupt page content.
+    let scalars = [style.size, style.line_spacing, style.char_spacing, style.scale, style.width];
+    let invalid_scalar = scalars.into_iter().flatten().any(|value| !value.is_finite());
+    let invalid_color = style.color.is_some_and(|rgb| rgb.into_iter().any(|value| !value.is_finite()));
+    let invalid_offset = style.offset.is_some_and(|xy| xy.into_iter().any(|value| !value.is_finite()));
+    if invalid_scalar || invalid_color || invalid_offset {
+        return Err(EditError::Invalid("text formatting must contain finite numbers".into()));
+    }
     let lines = text_lines(doc, page)?;
     let blocks = group_blocks(&lines);
     let b = blocks.get(block).cloned().ok_or_else(|| EditError::Invalid(format!("page {} has no paragraph {}", page + 1, block + 1)))?;
