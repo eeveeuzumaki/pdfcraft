@@ -934,7 +934,7 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
     let b = blocks.get(block).cloned().ok_or_else(|| EditError::Invalid(format!("page {} has no paragraph {}", page + 1, block + 1)))?;
     // A no-op edit must not re-encode a subset font or normalize intentional
     // spacing/kerning. Explicit formatting requests still run below.
-    if style == &BlockStyle::default() && text.is_none_or(|requested| requested == b.text) {
+    if style == &BlockStyle::default() && text.is_none_or(|requested| requested == b.text.as_str()) {
         return Ok(LineEdit { substituted: None });
     }
     let members: Vec<&TextLine> = b.lines.iter().map(|i| &lines[*i]).collect();
