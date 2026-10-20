@@ -846,6 +846,34 @@ fn justify_underline_and_spacing() {
     assert!(((w2[2] - w2[0]) - (w0[2] - w0[0]) / 2.0).abs() < 1.0, "{w0:?} → {w2:?}");
 }
 
+/// Some PDFs paint the same words in separate page content streams (e.g. synthetic
+/// bold text or a hidden OCR layer). An edit must remove both old copies, not
+/// leave the unchanged drawing beneath the replacement.
+#[test]
+fn replacing_a_line_removes_overlaid_text_from_another_stream() {
+    let original = "BT /F1 12 Tf 72 700 Td (Original) Tj ET";
+    let overlay = "BT /F1 12 Tf 72 700 Td (Original) Tj ET BT /F1 12 Tf 72 640 Td (Keep caption) Tj ET";
+    let mut doc = split_page(original, overlay);
+    assert_eq!(text::text_lines(&doc, 0).unwrap().iter().filter(|line| line.text == "Original").count(), 2);
+    text::replace_line(&mut doc, 0, 0, "Replaced").unwrap();
+    let doc = reopen(&doc);
+    let text: Vec<String> = text::text_lines(&doc, 0).unwrap().into_iter().map(|l| l.text).collect();
+    assert_eq!(text, ["Replaced", "Keep caption"]);
+    assert!(!streams(&doc, 0).join("\n").contains("(Original)"));
+}
+
+#[test]
+fn replacing_a_paragraph_removes_overlaid_text_from_another_stream() {
+    let original = "BT /F1 12 Tf 72 700 Td (Original) Tj ET";
+    let overlay = "BT /F1 12 Tf 72 700 Td (Original) Tj ET BT /F1 12 Tf 72 640 Td (Keep caption) Tj ET";
+    let mut doc = split_page(original, overlay);
+    text::replace_block(&mut doc, 0, 0, "Replaced").unwrap();
+    let doc = reopen(&doc);
+    let text: Vec<String> = text::text_lines(&doc, 0).unwrap().into_iter().map(|l| l.text).collect();
+    assert_eq!(text, ["Replaced", "Keep caption"]);
+    assert!(!streams(&doc, 0).join("\n").contains("(Original)"));
+}
+
 #[test]
 fn a_line_drawn_twice_is_replaced_everywhere() {
     // Fake bold: a line drawn twice at the same spot (each copy its own text object). The two
