@@ -29,13 +29,28 @@ fn sample_pdf() -> Vec<u8> {
     let objects: Vec<Vec<u8>> = vec![
         b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
         b"<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 600 800] >>".to_vec(),
-        b"<< /Type /Page /Parent 2 0 R /Contents 6 0 R /Resources << /Font << /F1 5 0 R >> /XObject << /Im0 8 0 R >> >> >>".to_vec(),
-        b"<< /Type /Page /Parent 2 0 R /Contents 7 0 R /Resources << /Font << /F1 5 0 R >> >> >>".to_vec(),
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_vec(),
+        concat!(
+            "<< /Type /Page /Parent 2 0 R /Contents 6 0 R ",
+            "/Resources << /Font << /F1 5 0 R >> ",
+            "/XObject << /Im0 8 0 R >> >> >>"
+        )
+        .as_bytes()
+        .to_vec(),
+        concat!(
+            "<< /Type /Page /Parent 2 0 R /Contents 7 0 R ",
+            "/Resources << /Font << /F1 5 0 R >> >> >>"
+        )
+        .as_bytes()
+        .to_vec(),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
+            .to_vec(),
         stream("", first.as_bytes()),
         stream("", second.as_bytes()),
         stream(
-            "/Type /XObject /Subtype /Image /Width 4 /Height 2 /ColorSpace /DeviceGray /BitsPerComponent 8",
+            concat!(
+                "/Type /XObject /Subtype /Image /Width 4 /Height 2 ",
+                "/ColorSpace /DeviceGray /BitsPerComponent 8"
+            ),
             &[0, 0, 0, 0, 0, 0, 0, 0],
         ),
     ];
@@ -49,12 +64,18 @@ fn sample_pdf() -> Vec<u8> {
         bytes.extend_from_slice(b"\nendobj\n");
     }
     let xref = bytes.len();
-    bytes.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+    bytes.extend_from_slice(
+        format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes(),
+    );
     for offset in offsets {
         bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
     }
     bytes.extend_from_slice(
-        format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes(),
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            objects.len() + 1
+        )
+        .as_bytes(),
     );
     bytes
 }
@@ -101,13 +122,23 @@ fn existing_text_edit_saves_and_keeps_other_content_exactly() {
     replace_line(&mut doc, 0, 0, replacement).expect("edit existing text");
 
     let (saved, reopened) = save_and_reopen(&doc);
-    assert!(saved.starts_with(&original), "incremental save must retain the original PDF bytes");
+    assert!(
+        saved.starts_with(&original),
+        "incremental save must retain the original PDF bytes"
+    );
     assert_eq!(pages(&reopened).len(), 2, "no pages should disappear");
     assert_eq!(page_text(&reopened, 0), ["Updated heading", "Preserve caption"]);
     assert_eq!(page_text(&reopened, 1), ["Untouched second page"]);
-    assert_eq!(page_stream(&reopened, 1), second_page_before, "untouched page content must remain byte-for-byte identical");
+    assert_eq!(
+        page_stream(&reopened, 1),
+        second_page_before,
+        "untouched page content must remain byte-for-byte identical"
+    );
     let caption_after = &text_lines(&reopened, 0).expect("edited page text")[1];
-    assert_eq!(caption_after.rect, caption_before.rect, "editing the heading must not reposition the caption");
+    assert_eq!(
+        caption_after.rect, caption_before.rect,
+        "editing the heading must not reposition the caption"
+    );
 }
 
 #[test]
@@ -127,7 +158,8 @@ fn existing_image_replacement_keeps_geometry_caption_and_other_page() {
     dict.set(b"ColorSpace".to_vec(), Object::name("DeviceGray"));
     dict.set(b"BitsPerComponent".to_vec(), Object::Int(8));
     let replacement = doc.add(Object::Stream(Stream::from_raw(dict, vec![220])));
-    change_image(&mut doc, 0, 0, &ImageChange::Replace(replacement)).expect("replace original image");
+    change_image(&mut doc, 0, 0, &ImageChange::Replace(replacement))
+        .expect("replace original image");
 
     let (_, reopened) = save_and_reopen(&doc);
     let after = page_images(&reopened, 0).expect("saved images");
@@ -136,7 +168,11 @@ fn existing_image_replacement_keeps_geometry_caption_and_other_page() {
     assert_eq!(after[0].rect, rect_before, "replacement must retain original placement");
     assert_eq!(page_text(&reopened, 0), ["Original heading", "Preserve caption"]);
     assert_eq!(page_text(&reopened, 1), ["Untouched second page"]);
-    assert_eq!(page_stream(&reopened, 1), other_page_before, "image edit changed the unrelated page");
+    assert_eq!(
+        page_stream(&reopened, 1),
+        other_page_before,
+        "image edit changed the unrelated page"
+    );
 }
 
 #[test]
@@ -153,14 +189,21 @@ fn sequential_text_and_image_edits_survive_two_saves() {
     change_image(&mut doc, 0, 0, &ImageChange::Transform(transformed)).expect("second edit");
     let (second_saved, reopened) = save_and_reopen(&doc);
 
-    assert!(second_saved.starts_with(&first_saved), "the next incremental revision must keep the first saved bytes");
+    assert!(
+        second_saved.starts_with(&first_saved),
+        "the next incremental revision must keep the first saved bytes"
+    );
     assert_eq!(page_text(&reopened, 0), ["First revision", "Preserve caption"]);
     assert_eq!(page_text(&reopened, 1), ["Untouched second page"]);
     assert_eq!(page_stream(&reopened, 1), other_page_before);
     let moved = &page_images(&reopened, 0).expect("transformed image")[0];
     let expected = [60.0, 100.0, 220.0, 180.0];
     assert!(
-        moved.rect.iter().zip(expected).all(|(actual, expected)| (actual - expected).abs() < 0.001),
+        moved
+            .rect
+            .iter()
+            .zip(expected)
+            .all(|(actual, expected)| (actual - expected).abs() < 0.001),
         "image position after second save: {:?}",
         moved.rect,
     );
