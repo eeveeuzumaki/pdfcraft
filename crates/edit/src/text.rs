@@ -688,6 +688,12 @@ pub fn replace_line(doc: &mut Document, page: usize, line: usize, text: &str) ->
     let text = text.replace(['\n', '\r'], " ");
     let lines = text_lines(doc, page)?;
     let target = lines.get(line).cloned().ok_or_else(|| EditError::Invalid(format!("page {} has no line {}", page + 1, line + 1)))?;
+    // Keep the exact original glyph codes, font, kerning and content operators
+    // when the requested visible text is already present. Re-encoding an unchanged
+    // line can otherwise silently substitute its embedded/subset font.
+    if text == target.text {
+        return Ok(LineEdit { substituted: None });
+    }
     let p = page_dict(doc, page)?;
     let mut res = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     let mut fonts_res = res.get(b"Font").map(|f| doc.resolve(f)).and_then(|f| f.as_dict().cloned()).unwrap_or_default();
@@ -926,6 +932,11 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
     let lines = text_lines(doc, page)?;
     let blocks = group_blocks(&lines);
     let b = blocks.get(block).cloned().ok_or_else(|| EditError::Invalid(format!("page {} has no paragraph {}", page + 1, block + 1)))?;
+    // A no-op edit must not re-encode a subset font or normalize intentional
+    // spacing/kerning. Explicit formatting requests still run below.
+    if style == &BlockStyle::default() && text.is_none_or(|requested| requested == b.text) {
+        return Ok(LineEdit { substituted: None });
+    }
     let members: Vec<&TextLine> = b.lines.iter().map(|i| &lines[*i]).collect();
     let first = members[0];
     let p = page_dict(doc, page)?;
