@@ -530,14 +530,7 @@ fn unchanged_paragraph_edit_preserves_original_layout_and_font() {
     assert_eq!(page_content_bytes(&doc, 0), before);
 
     // The same words with an explicit style change must still be editable.
-    text::rewrite_block(
-        &mut doc,
-        0,
-        0,
-        None,
-        &text::BlockStyle { family: Some((added::Family::Times, true, false)), ..Default::default() },
-    )
-    .unwrap();
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { family: Some((added::Family::Times, true, false)), ..Default::default() }).unwrap();
     assert!(doc.is_modified());
     assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].base_font, "Times-Bold");
 }
