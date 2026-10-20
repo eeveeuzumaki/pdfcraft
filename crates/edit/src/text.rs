@@ -215,11 +215,7 @@ fn edit_page_streams(
             }
             let ops = parse(bytes).ops;
             let rewritten = splice(bytes, &ops, |i| {
-                let insert = if stream == target_stream && i == insert_at {
-                    std::mem::take(&mut replacement)
-                } else {
-                    Vec::new()
-                };
+                let insert = if stream == target_stream && i == insert_at { std::mem::take(&mut replacement) } else { Vec::new() };
                 (insert, drop.get(&stream).is_none_or(|indices| !indices.contains(&i)))
             });
             let mut dict = match &*doc.resolve(original) {
