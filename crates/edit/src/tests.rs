@@ -854,10 +854,7 @@ fn replacing_a_line_removes_overlaid_text_from_another_stream() {
     let original = "BT /F1 12 Tf 72 700 Td (Original) Tj ET";
     let overlay = "BT /F1 12 Tf 72 700 Td (Original) Tj ET BT /F1 12 Tf 72 640 Td (Keep caption) Tj ET";
     let mut doc = split_page(original, overlay);
-    assert_eq!(
-        text::text_lines(&doc, 0).unwrap().iter().filter(|line| line.text == "Original").count(),
-        2
-    );
+    assert_eq!(text::text_lines(&doc, 0).unwrap().iter().filter(|line| line.text == "Original").count(), 2);
     text::replace_line(&mut doc, 0, 0, "Replaced").unwrap();
     let doc = reopen(&doc);
     let text: Vec<String> = text::text_lines(&doc, 0).unwrap().into_iter().map(|l| l.text).collect();
