@@ -580,6 +580,26 @@ fn missing_glyphs_preserve_source_style_in_fallback() {
     assert!(content.contains("/PCEdHelveticaBoldOblique 12 Tf"), "{content}");
 }
 
+/// A trailing TJ adjustment advances the text position but does not draw a
+/// space character. Internal TJ gaps before another string can indicate spaces.
+#[test]
+fn trailing_tj_adjustments_do_not_create_phantom_text_spaces() {
+    let doc = text_page("BT /F1 12 Tf 72 700 Td [(Hello) -500] TJ ET");
+    let lines = text::text_lines(&doc, 0).unwrap();
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].text, "Hello");
+    assert_eq!(text::text_lines(&reopen(&doc), 0).unwrap()[0].text, "Hello");
+
+    let doc = text_page("BT /F1 12 Tf 72 700 Td [(Hello) -500 (world)] TJ ET");
+    assert_eq!(text::text_lines(&reopen(&doc), 0).unwrap()[0].text, "Hello world");
+
+    // A following run that uses a different font must not inherit a phantom
+    // space from the first run's trailing positioning adjustment.
+    let doc = text_page("BT /F1 12 Tf 72 700 Td [(Hello) -500] TJ /F2 12 Tf (ab) Tj ET");
+    let lines = text::text_lines(&reopen(&doc), 0).unwrap();
+    assert_eq!(lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), ["Hello", "ab"]);
+}
+
 #[test]
 fn text_lines_are_found_and_replaced_in_place() {
     let mut doc =
