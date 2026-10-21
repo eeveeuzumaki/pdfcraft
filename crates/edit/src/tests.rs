@@ -687,11 +687,7 @@ fn missing_japanese_fallback_glyph_does_not_mutate_document() {
     for block in [false, true] {
         let mut doc = text_page("BT /F2 12 Tf 72 700 Td (ab) Tj ET");
         let before = page_content_bytes(&doc, 0);
-        let result = if block {
-            text::replace_block(&mut doc, 0, 0, replacement)
-        } else {
-            text::replace_line(&mut doc, 0, 0, replacement)
-        };
+        let result = if block { text::replace_block(&mut doc, 0, 0, replacement) } else { text::replace_line(&mut doc, 0, 0, replacement) };
         assert!(matches!(&result, Err(EditError::Invalid(_))), "{result:?}");
         assert!(!doc.is_modified(), "failed fallback edit created PDF objects");
         assert_eq!(page_content_bytes(&doc, 0), before);
