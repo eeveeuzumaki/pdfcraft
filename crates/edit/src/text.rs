@@ -631,7 +631,7 @@ fn type3_font(doc: &mut Document, fonts_res: &mut Dict, text: &str, family: crat
     let mut cmap = String::from(
         "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CMapType 2 def\n1 begincodespacerange\n<01> <FF>\nendcodespacerange\n",
     );
-    cmap.push_str(&format!("{} beginbfchar\n", chars.len()));
+    cmap.push_str(&format!("{} beginbfchar\n", paths.len()));
     for (i, (ch, path, width)) in paths.into_iter().enumerate() {
         // MAX_TYPE3_GLYPHS <= 240, so every enumerated code fits into u8.
         let code = (i + 1) as u8;
