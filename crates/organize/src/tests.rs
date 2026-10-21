@@ -177,6 +177,35 @@ fn inserts_blank_page() {
     assert_eq!((w, h), (612.0, 792.0));
 }
 
+/// Invalid page geometry must not mutate the page tree or allocate objects.
+/// Page dimensions follow the same bounds as creating a blank PDF.
+#[test]
+fn blank_page_rejects_invalid_dimensions_without_dirtying_document() {
+    for (width, height) in [
+        (f64::NAN, 792.0),
+        (612.0, f64::INFINITY),
+        (f64::NEG_INFINITY, 792.0),
+        (-1.0, 792.0),
+        (612.0, 0.0),
+        (2.0, 792.0),
+        (612.0, 14_401.0),
+        (14_401.0, 792.0),
+    ] {
+        let mut doc = open(fixture());
+        let original_pages = labels(&doc);
+        let error = insert_blank_page(&mut doc, 1, width, height).unwrap_err();
+        assert!(matches!(error, OrganizeError::InvalidBox(_)), "{width} x {height}: {error:?}");
+        assert!(!doc.is_modified(), "{width} x {height} left the document modified");
+        assert_eq!(labels(&doc), original_pages);
+    }
+
+    // Inclusive PDF bounds are accepted and survive a save/reopen.
+    let mut doc = open(fixture());
+    insert_blank_page(&mut doc, 0, 3.0, 14_400.0).unwrap();
+    let saved = save_and_reopen(&doc);
+    assert_eq!(labels(&saved), ["blank", "Page 1", "Page 2", "Page 3"]);
+}
+
 #[test]
 fn document_info_edits_round_trip_with_unicode() {
     let mut doc = open(fixture());
