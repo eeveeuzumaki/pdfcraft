@@ -194,7 +194,7 @@ fn blank_page_rejects_invalid_dimensions_without_dirtying_document() {
         let mut doc = open(fixture());
         let original_pages = labels(&doc);
         let error = insert_blank_page(&mut doc, 1, width, height).unwrap_err();
-        assert!(matches!(error, OrganizeError::InvalidBox(_)), "{width} x {height}: {error:?}");
+        assert!(matches!(&error, OrganizeError::InvalidBox(_)), "{width} x {height}: {error:?}");
         assert!(!doc.is_modified(), "{width} x {height} left the document modified");
         assert_eq!(labels(&doc), original_pages);
     }
