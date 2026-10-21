@@ -600,6 +600,41 @@ fn trailing_tj_adjustments_do_not_create_phantom_text_spaces() {
     assert_eq!(lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), ["Hello", "ab"]);
 }
 
+/// When two adjacent fragments use different PDF fonts, changing the first
+/// fragment must not pull the next fragment toward it.
+#[test]
+fn edit_shorter_text_preserves_following_run_position() {
+    let original = "BT /F1 12 Tf 72 700 Td (Hello) Tj /F2 12 Tf (ab) Tj ET";
+    let mut doc = text_page(original);
+    let before = text::text_lines(&doc, 0).unwrap();
+    assert_eq!(before.iter().map(|line| line.text.as_str()).collect::<Vec<_>>(), ["Hello", "ab"]);
+    let neighbor = before[1].clone();
+    let edit = text::replace_line(&mut doc, 0, 0, "Hi").unwrap();
+    assert_eq!(edit.substituted, None);
+    let saved = reopen(&doc);
+    let after = text::text_lines(&saved, 0).unwrap();
+    assert_eq!(after.iter().map(|line| line.text.as_str()).collect::<Vec<_>>(), ["Hi", "ab"]);
+    assert!(close(after[1].rect, neighbor.rect), "neighbor moved when editing earlier text");
+    assert_eq!(after[1].font, neighbor.font);
+}
+
+/// Internal TJ kerning and a trailing positioning number both contribute to
+/// the original next-run position. Editing must keep those advances unchanged.
+#[test]
+fn edit_kerned_text_preserves_following_run_position() {
+    let original = "BT /F1 12 Tf 72 700 Td [(Hello) -150] TJ /F2 12 Tf (ab) Tj ET";
+    let mut doc = text_page(original);
+    let before = text::text_lines(&doc, 0).unwrap();
+    assert_eq!(before.iter().map(|line| line.text.as_str()).collect::<Vec<_>>(), ["Hello", "ab"]);
+    let neighbor = before[1].clone();
+    text::replace_line(&mut doc, 0, 0, "Hi").unwrap();
+    let saved = reopen(&doc);
+    let after = text::text_lines(&saved, 0).unwrap();
+    assert_eq!(after.iter().map(|line| line.text.as_str()).collect::<Vec<_>>(), ["Hi", "ab"]);
+    assert!(close(after[1].rect, neighbor.rect), "TJ kerning changed adjacent run position");
+    assert_eq!(after[1].font, neighbor.font);
+}
+
 #[test]
 fn text_lines_are_found_and_replaced_in_place() {
     let mut doc =
