@@ -483,6 +483,12 @@ pub(crate) fn signature_pad(
     let what = if d.initials { tl!("initials") } else { tl!("signature") };
     let title = if d.editing { tl!("Change {what}") } else { tl!("Create {what}") };
     ui.label(egui::RichText::new(crate::i18n::fmt(title, &[("what", what)])).font(crate::theme::semibold(18.0)));
+    ui.label(
+        egui::RichText::new(tl!("A drawn, typed or image signature is a visible mark. It does not cryptographically sign the PDF, verify the signer or detect later changes. Use a Digital ID for a certificate-based signature."))
+            .small()
+            .color(t.text_muted),
+    );
+    ui.add_space(4.0);
     ui.horizontal(|ui| {
         if crate::widgets::pill_button(ui, tl_ctx!("signature pad", "Type"), !d.drawing && !d.image_mode).clicked() {
             d.drawing = false;

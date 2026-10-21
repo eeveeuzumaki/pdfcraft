@@ -2033,3 +2033,5 @@
 	Pinned {folder} to Home	{folder} épinglé à l'Accueil
 	No recent files	Aucun fichier récent
 	Go to page…	Aller à la page…
+	A Digital ID creates a certificate-based signature. PDF readers can verify the signed content and check for later changes. A visible Fill & Sign mark alone does not do this.	Un ID numérique crée une signature fondée sur un certificat. Les lecteurs PDF peuvent vérifier le contenu signé et détecter les modifications ultérieures. Une marque visible de Remplir et signer ne le permet pas à elle seule.
+	A drawn, typed or image signature is a visible mark. It does not cryptographically sign the PDF, verify the signer or detect later changes. Use a Digital ID for a certificate-based signature.	Une signature dessinée, saisie ou insérée sous forme d’image est une marque visible. Elle ne signe pas le PDF de façon cryptographique, ne vérifie pas l’identité du signataire et ne détecte pas les modifications ultérieures. Utilisez un ID numérique pour une signature fondée sur un certificat.

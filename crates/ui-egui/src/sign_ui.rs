@@ -460,6 +460,11 @@ fn error(ui: &mut egui::Ui, err: &Option<String>) {
 fn choose(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
     title(ui, "Sign with a Digital ID");
     ui.label(tl!("Choose the digital ID that you want to use for signing:"));
+    ui.label(
+        egui::RichText::new(tl!("A Digital ID creates a certificate-based signature. PDF readers can verify the signed content and check for later changes. A visible Fill & Sign mark alone does not do this."))
+            .small()
+            .color(t.text_muted),
+    );
     ui.add_space(6.0);
     let ids = app.digital_ids.clone();
     let Some(d) = app.sign_draft.as_mut() else { return true };
