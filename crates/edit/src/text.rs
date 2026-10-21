@@ -395,7 +395,7 @@ fn interpret(doc: &Document, ops: &[Op], fonts_res: &Dict, cache: &mut HashMap<V
                 let mut text = String::new();
                 let mut decodable = true;
                 let mut x_text = 0.0;
-                for p in &pieces {
+                for (piece, p) in pieces.iter().enumerate() {
                     match p {
                         Object::String(s) => {
                             for (code, len) in m.codes(&s.bytes) {
@@ -410,8 +410,11 @@ fn interpret(doc: &Document, ops: &[Op], fonts_res: &Dict, cache: &mut HashMap<V
                         other => {
                             if let Some(n) = other.as_f64() {
                                 let dx = -n / 1000.0 * ts.size * ts.scale;
-                                // A large gap inside TJ reads as a space.
-                                if dx > ts.size * 0.2 && !text.ends_with(' ') {
+                                // A large gap *between glyphs* reads as a space.
+                                // A trailing TJ adjustment only moves the text matrix; it
+                                // does not represent a printable space in the current run.
+                                let more_text = pieces[piece + 1..].iter().any(|part| matches!(part, Object::String(s) if !s.bytes.is_empty()));
+                                if dx > ts.size * 0.2 && more_text && !text.ends_with(' ') {
                                     text.push(' ');
                                 }
                                 x_text += dx;
