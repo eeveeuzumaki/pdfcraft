@@ -623,13 +623,10 @@ fn type3_font(doc: &mut Document, fonts_res: &mut Dict, text: &str, family: crat
     }
     // Resolve every glyph before adding any objects. If one character is
     // missing or too complex, the caller gets an error with an unmodified PDF.
-    let paths = chars
-        .into_iter()
-        .map(|ch| type3_path(face, ch).map(|(path, width)| (ch, path, width)))
-        .collect::<Result<Vec<_>, _>>()?;
+    let paths = chars.into_iter().map(|ch| type3_path(face, ch).map(|(path, width)| (ch, path, width))).collect::<Result<Vec<_>, _>>()?;
     let mut codes = Vec::with_capacity(paths.len());
     let mut charprocs = Dict::new();
-    let mut widths = Vec::with_capacity(chars.len());
+    let mut widths = Vec::with_capacity(paths.len());
     let mut differences = vec![Object::Int(1)];
     let mut cmap = String::from(
         "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CMapType 2 def\n1 begincodespacerange\n<01> <FF>\nendcodespacerange\n",
