@@ -1994,3 +1994,5 @@
 	Created a PDF from {n} files; left out: {names}	PDF создан из файлов: {n}; пропущены: {names}
 	Created a PDF from the first {n} files	PDF создан из первых файлов: {n}
 	Go to page…	Перейти на страницу…
+	A Digital ID creates a certificate-based signature. PDF readers can verify the signed content and check for later changes. A visible Fill & Sign mark alone does not do this.	Цифровое удостоверение создаёт подпись на основе сертификата. Программы для чтения PDF могут проверить подписанное содержимое и обнаружить последующие изменения. Одной видимой отметки «Заполнить и подписать» для этого недостаточно.
+	A drawn, typed or image signature is a visible mark. It does not cryptographically sign the PDF, verify the signer or detect later changes. Use a Digital ID for a certificate-based signature.	Нарисованная, набранная или вставленная из изображения подпись — лишь видимая отметка. Она не подписывает PDF криптографически, не подтверждает личность подписанта и не выявляет последующие изменения. Для подписи на основе сертификата используйте цифровое удостоверение.
