@@ -3,7 +3,7 @@
 //! Conversion runs in an isolated temporary profile so a running LibreOffice
 //! desktop instance does not steal our conversion request.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -16,7 +16,11 @@ const TIMEOUT: Duration = Duration::from_secs(90);
 /// Return the extension of an eligible local Office file, or None. Do not
 /// accept macro-enabled formats (.docm, .xlsm, .pptm).
 pub fn format(name: &str) -> Option<&'static str> {
-    let extension = name.rsplit('.').next()?.to_ascii_lowercase();
+    let (stem, extension) = name.rsplit_once('.')?;
+    if stem.is_empty() {
+        return None;
+    }
+    let extension = extension.to_ascii_lowercase();
     match extension.as_str() {
         "docx" => Some("docx"),
         "xlsx" => Some("xlsx"),
@@ -111,6 +115,7 @@ pub fn convert(name: &str, bytes: &[u8]) -> Result<Vec<u8>, CreateError> {
 /// Prefer the executable in PATH; recognize normal installed locations for
 /// non-technical users whose graphical installer didn't add it to PATH.
 fn candidates() -> Vec<PathBuf> {
+    #[allow(unused_mut)]
     let mut choices = vec![PathBuf::from("soffice"), PathBuf::from("libreoffice")];
     #[cfg(target_os = "macos")]
     choices.push(PathBuf::from("/Applications/LibreOffice.app/Contents/MacOS/soffice"));
