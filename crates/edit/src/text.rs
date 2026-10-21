@@ -720,7 +720,29 @@ pub fn replace_line(doc: &mut Document, page: usize, line: usize, text: &str) ->
         _ => {}
     }
     match reused {
-        Some(bytes) => replacement.push(Op::new("Tj", vec![Object::String(PdfString::literal(bytes))])),
+        Some(bytes) => {
+            let string = Object::String(PdfString::literal(bytes.clone()));
+            // Keep the original advance for a single text-showing operator.
+            // Subsequent runs can change fonts without moving their text matrix;
+            // replacing a word with a shorter one must not pull them left.
+            let adjustment = if target.ops.len() == 1 {
+                font.as_ref().and_then(|metrics| {
+                    let state = &target.origin.state;
+                    let size = state.font.as_ref()?.1;
+                    let original = text_show_advance(&ops[first], metrics, size, state.char_spacing, state.word_spacing)?;
+                    let replacement_width = glyph_advance(&bytes, metrics, size, state.char_spacing, state.word_spacing);
+                    let correction = (replacement_width - original) * 1000.0 / size;
+                    (correction.is_finite() && correction.abs() > 0.001).then_some(correction)
+                })
+            } else {
+                None
+            };
+            if let Some(kern) = adjustment {
+                replacement.push(Op::new("TJ", vec![Object::Array(vec![string, pdfcraft_content::num(kern)])]));
+            } else {
+                replacement.push(Op::new("Tj", vec![string]));
+            }
+        }
         None => {
             if needs_type3(&text) {
                 let fallback = type3_font(doc, &mut fonts_res, &text, source_family(&target.base_font), target.bold)?;
@@ -771,6 +793,35 @@ pub fn replace_line(doc: &mut Document, page: usize, line: usize, text: &str) ->
         }
     })?;
     Ok(LineEdit { substituted })
+}
+
+/// Advance along the current text line before horizontal scaling, in text-space
+/// units. Matches the metrics used by the text interpreter, including spaces.
+fn glyph_advance(bytes: &[u8], metrics: &Metrics, size: f64, char_spacing: f64, word_spacing: f64) -> f64 {
+    metrics
+        .codes(bytes)
+        .iter()
+        .map(|(code, len)| metrics.width(*code) * size + char_spacing + if metrics.is_space(*code, *len) { word_spacing } else { 0.0 })
+        .sum()
+}
+
+/// Advance caused by one Tj/TJ operator, including original TJ kerning. Other
+/// text-showing operators affect line movement or text-state parameters and are
+/// left to the existing editing path.
+fn text_show_advance(op: &Op, metrics: &Metrics, size: f64, char_spacing: f64, word_spacing: f64) -> Option<f64> {
+    let parts: Vec<&Object> = match op.op.as_slice() {
+        b"Tj" => vec![op.operands.first()?],
+        b"TJ" => op.operands.first()?.as_array()?.iter().collect(),
+        _ => return None,
+    };
+    let mut advance = 0.0;
+    for part in parts {
+        match part {
+            Object::String(text) => advance += glyph_advance(&text.bytes, metrics, size, char_spacing, word_spacing),
+            other => advance -= other.as_f64()? * size / 1000.0,
+        }
+    }
+    Some(advance)
 }
 
 /// The size of the last `Tf` before operator `at`.
