@@ -318,6 +318,11 @@ pub fn replace_pages(doc: &mut Document, targets: &[usize], src: &Document, src_
 
 /// Insert a blank page of `width × height` points at position `at` (0 = before the first page).
 pub fn insert_blank_page(doc: &mut Document, at: usize, width: f64, height: f64) -> Result<ObjRef, OrganizeError> {
+    // Match pdfcraft-create's blank page size constraints and reject invalid
+    // geometry before adding objects, so errors cannot dirty the document.
+    if !(width.is_finite() && height.is_finite() && (3.0..=14_400.0).contains(&width) && (3.0..=14_400.0).contains(&height)) {
+        return Err(OrganizeError::InvalidBox("blank page width and height must be between 3 and 14,400 points".into()));
+    }
     let mut all = walk(doc)?;
     let root = pages_root(doc)?;
     let mut page = Dict::new();
