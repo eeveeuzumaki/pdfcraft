@@ -390,7 +390,8 @@ pub enum SourceKind {
 pub const CONVERTIBLE: [&str; 12] = ["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx", "txt", "text"];
 
 #[cfg(not(target_arch = "wasm32"))]
-pub const CONVERTIBLE: [&str; 18] = ["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx", "txt", "text", "docx", "xlsx", "pptx", "odt", "ods", "odp"];
+pub const CONVERTIBLE: [&str; 18] =
+    ["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx", "txt", "text", "docx", "xlsx", "pptx", "odt", "ods", "odp"];
 
 fn is_image(bytes: &[u8]) -> bool {
     bytes.starts_with(&[0xFF, 0xD8])

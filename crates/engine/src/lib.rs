@@ -2567,7 +2567,9 @@ impl Session {
     /// (it must open and allow copying pages) and returned as it is.
     pub fn convert_to_pdf(&self, name: &str, bytes: &Arc<Vec<u8>>) -> Result<(SourceKind, Arc<Vec<u8>>), EditError> {
         let Some(kind) = source_kind(name, bytes) else {
-            return Err(EditError::Source(format!("{name}: this file type can't be converted; use a PDF, image, .txt file or supported Office document")));
+            return Err(EditError::Source(format!(
+                "{name}: this file type can't be converted; use a PDF, image, .txt file or supported Office document"
+            )));
         };
         let title = name.rsplit_once('.').map_or(name, |(s, _)| s);
         // Image decoders read untrusted bytes: a panic in one must not take the app down.

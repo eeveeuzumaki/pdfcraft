@@ -49,8 +49,8 @@ pub fn convert(name: &str, bytes: &[u8]) -> Result<Vec<u8>, CreateError> {
     let temp = tempfile::tempdir().map_err(|e| CreateError::Invalid(format!("couldn't create temporary Office workspace: {e}")))?;
     let profile = temp.path().join("lo-profile");
     std::fs::create_dir(&profile).map_err(|e| CreateError::Invalid(format!("couldn't prepare LibreOffice profile: {e}")))?;
-    let url = url::Url::from_directory_path(&profile)
-        .map_err(|()| CreateError::Invalid("couldn't construct a private LibreOffice profile URL".into()))?;
+    let url =
+        url::Url::from_directory_path(&profile).map_err(|()| CreateError::Invalid("couldn't construct a private LibreOffice profile URL".into()))?;
     let input = temp.path().join(format!("source.{ext}"));
     std::fs::write(&input, bytes).map_err(|e| CreateError::Invalid(format!("couldn't stage the Office file: {e}")))?;
     let output = temp.path().join("source.pdf");
@@ -97,9 +97,7 @@ pub fn convert(name: &str, bytes: &[u8]) -> Result<Vec<u8>, CreateError> {
         break;
     }
     if !launched {
-        return Err(CreateError::Invalid(
-            "LibreOffice is required for offline Office conversion. Install it on this computer and retry.".into(),
-        ));
+        return Err(CreateError::Invalid("LibreOffice is required for offline Office conversion. Install it on this computer and retry.".into()));
     }
     let metadata = std::fs::metadata(&output).map_err(|_| CreateError::Invalid("LibreOffice did not create a PDF".into()))?;
     if metadata.len() < 8 || metadata.len() > MAX_OUTPUT {
