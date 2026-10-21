@@ -5,6 +5,8 @@
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 
 mod extract;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod office;
 pub use extract::{ExtractedImage, ImageExport, extract_images, image_file};
 use pdfcraft_fonts::{literal, win_ansi, wrap};
 
@@ -380,10 +382,15 @@ pub enum SourceKind {
     Pdf,
     Image,
     Text,
+    Office,
 }
 
 /// File extensions Create converts to PDF (images and plain text).
+#[cfg(target_arch = "wasm32")]
 pub const CONVERTIBLE: [&str; 12] = ["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx", "txt", "text"];
+
+#[cfg(not(target_arch = "wasm32"))]
+pub const CONVERTIBLE: [&str; 18] = ["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx", "txt", "text", "docx", "xlsx", "pptx", "odt", "ods", "odp"];
 
 fn is_image(bytes: &[u8]) -> bool {
     bytes.starts_with(&[0xFF, 0xD8])
@@ -408,6 +415,10 @@ pub fn source_kind(name: &str, bytes: &[u8]) -> Option<SourceKind> {
     }
     if is_image(bytes) {
         return Some(SourceKind::Image);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if office::format(name).is_some() && office::looks_like_office(bytes) {
+        return Some(SourceKind::Office);
     }
     let lower = name.to_ascii_lowercase();
     (lower.ends_with(".txt") || lower.ends_with(".text")).then_some(SourceKind::Text)
