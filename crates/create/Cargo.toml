@@ -17,6 +17,10 @@ tiff = "0.11"
 image = { version = "0.25", default-features = false, features = ["bmp", "gif"] }
 thiserror = { workspace = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tempfile = "3.27"
+url = "2.5"
+
 [dev-dependencies]
 image = { version = "0.25", default-features = false, features = ["bmp", "gif"] }
 hayro-syntax = { workspace = true }
