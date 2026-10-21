@@ -710,6 +710,26 @@ fn editing_text_keeps_the_tokens_a_stream_shares_with_its_neighbours() {
     assert_split_tokens_kept(&reopen(&doc), "Rewrapped");
 }
 
+/// Missing glyphs must fail before creating any Type 3 font objects. In
+/// particular, a valid Japanese glyph *before* the unsupported one must not
+/// leave the PDF dirty after the failed edit.
+#[test]
+fn missing_japanese_fallback_glyph_does_not_mutate_document() {
+    if without_craft_fonts("missing_japanese_fallback_glyph_does_not_mutate_document") {
+        return;
+    }
+    let replacement = "日本\u{1f4a9}";
+    for block in [false, true] {
+        let mut doc = text_page("BT /F2 12 Tf 72 700 Td (ab) Tj ET");
+        let before = page_content_bytes(&doc, 0);
+        let result = if block { text::replace_block(&mut doc, 0, 0, replacement) } else { text::replace_line(&mut doc, 0, 0, replacement) };
+        assert!(matches!(&result, Err(EditError::Invalid(_))), "{result:?}");
+        assert!(!doc.is_modified(), "failed fallback edit created PDF objects");
+        assert_eq!(page_content_bytes(&doc, 0), before);
+        assert_eq!(text::text_lines(&doc, 0).unwrap()[0].text, "ab");
+    }
+}
+
 #[test]
 fn missing_glyphs_substitute_helvetica_and_impossible_text_is_refused() {
     let mut doc = text_page("BT /F2 10 Tf 72 600 Td (ab) Tj ET");
