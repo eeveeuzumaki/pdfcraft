@@ -2044,3 +2044,5 @@
 	Choose a PNG or JPEG image (up to 4 MiB). Transparency is preserved.	选择 PNG 或 JPEG 图像（最大 4 MiB）。透明度会保留。
 	Couldn't import the signature image: {e}	无法导入签名图像：{e}
 	Go to page…	转到页面…
+	A Digital ID creates a certificate-based signature. PDF readers can verify the signed content and check for later changes. A visible Fill & Sign mark alone does not do this.	数字身份凭证会创建基于证书的签名。PDF 阅读器可以验证已签名的内容并检查后续修改。仅添加可见的“填写和签名”标记无法实现这些验证。
+	A drawn, typed or image signature is a visible mark. It does not cryptographically sign the PDF, verify the signer or detect later changes. Use a Digital ID for a certificate-based signature.	手绘、键入或图像签名只是一种可见标记。它不会对 PDF 进行加密签名、验证签名者身份或检测后续修改。如需基于证书的签名，请使用数字身份凭证。
