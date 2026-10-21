@@ -621,7 +621,13 @@ fn type3_font(doc: &mut Document, fonts_res: &mut Dict, text: &str, family: crat
     if chars.is_empty() {
         return Err(EditError::Invalid("replacement text is empty".into()));
     }
-    let mut codes = Vec::with_capacity(chars.len());
+    // Resolve every glyph before adding any objects. If one character is
+    // missing or too complex, the caller gets an error with an unmodified PDF.
+    let paths = chars
+        .into_iter()
+        .map(|ch| type3_path(face, ch).map(|(path, width)| (ch, path, width)))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut codes = Vec::with_capacity(paths.len());
     let mut charprocs = Dict::new();
     let mut widths = Vec::with_capacity(chars.len());
     let mut differences = vec![Object::Int(1)];
@@ -629,10 +635,10 @@ fn type3_font(doc: &mut Document, fonts_res: &mut Dict, text: &str, family: crat
         "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CMapType 2 def\n1 begincodespacerange\n<01> <FF>\nendcodespacerange\n",
     );
     cmap.push_str(&format!("{} beginbfchar\n", chars.len()));
-    for (i, ch) in chars.into_iter().enumerate() {
-        let code = u8::try_from(i + 1).map_err(|_| EditError::Invalid("Japanese replacement has too many unique characters".into()))?;
+    for (i, (ch, path, width)) in paths.into_iter().enumerate() {
+        // MAX_TYPE3_GLYPHS <= 240, so every enumerated code fits into u8.
+        let code = (i + 1) as u8;
         let glyph_name = format!("g{code:02X}");
-        let (path, width) = type3_path(face, ch)?;
         let mut pd = Dict::new();
         pd.set(b"Length".to_vec(), path.len() as i64);
         let proc_ref = doc.add(Object::Stream(Stream::from_raw(pd, path)));
