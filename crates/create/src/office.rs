@@ -33,9 +33,15 @@ pub fn format(name: &str) -> Option<&'static str> {
 }
 
 /// OOXML and ODF formats are ZIP containers, never plain text or a PDF header.
-/// This is only a quick format check; LibreOffice does the full validation.
+/// Require both a local-file header and an end-of-central-directory marker so
+/// truncated PK-prefixed files are rejected before launching LibreOffice.
+/// This remains a quick check; LibreOffice performs full format validation.
 pub fn looks_like_office(bytes: &[u8]) -> bool {
-    bytes.starts_with(b"PK\x03\x04")
+    bytes.len() >= 52
+        && bytes.starts_with(b"PK\x03\x04")
+        && bytes[bytes.len().saturating_sub(65_557)..]
+            .windows(4)
+            .any(|window| window == b"PK\x05\x06")
 }
 
 /// Convert one Office document entirely on-device. The input is copied to a
@@ -137,7 +143,11 @@ mod tests {
         for name in ["macro.docm", "macro.xlsm", "macro.pptm", "fake.zip", "note.txt", ".docx"] {
             assert!(format(name).is_none(), "{name}");
         }
-        assert!(looks_like_office(b"PK\x03\x04archive"));
+        // A plausible ZIP must have an end-of-central-directory record.
+        let zipish = [b"PK\x03\x04".as_slice(), &[0; 46], b"PK\x05\x06", &[0; 18]].concat();
+        assert!(looks_like_office(&zipish));
+        assert!(!looks_like_office(b"PK\x03\x04"));
+        assert!(!looks_like_office(b"PK\x03\x04archive"));
         assert!(!looks_like_office(b"%PDF-1.7"));
         assert!(!looks_like_office(b"not a zip"));
     }
