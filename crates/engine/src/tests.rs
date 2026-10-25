@@ -327,7 +327,10 @@ fn mixed_files_convert_and_combine_in_order() {
 fn files_that_cannot_be_converted_are_refused_clearly() {
     let s = Session::new();
     let err = s.convert_to_pdf("report.docx", &Arc::new(b"PK\x03\x04".to_vec())).unwrap_err();
-    assert_eq!(err, EditError::Source("report.docx: this file type can't be converted; use a PDF, image, .txt file or supported Office document".into()));
+    assert_eq!(
+        err,
+        EditError::Source("report.docx: this file type can't be converted; use a PDF, image, .txt file or supported Office document".into())
+    );
     assert!(matches!(s.convert_to_pdf("empty", &Arc::new(Vec::new())), Err(EditError::Source(_))));
     // Damaged inputs of a known type fail with an error, not a panic.
     assert!(s.convert_to_pdf("bad.png", &Arc::new(b"\x89PNG\r\n\x1a\nnope".to_vec())).is_err());
