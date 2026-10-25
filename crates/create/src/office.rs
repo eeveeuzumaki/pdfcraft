@@ -39,9 +39,7 @@ pub fn format(name: &str) -> Option<&'static str> {
 pub fn looks_like_office(bytes: &[u8]) -> bool {
     bytes.len() >= 52
         && bytes.starts_with(b"PK\x03\x04")
-        && bytes[bytes.len().saturating_sub(65_557)..]
-            .windows(4)
-            .any(|window| window == b"PK\x05\x06")
+        && bytes[bytes.len().saturating_sub(65_557)..].windows(4).any(|window| window == b"PK\x05\x06")
 }
 
 /// Convert one Office document entirely on-device. The input is copied to a
