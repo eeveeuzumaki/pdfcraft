@@ -3540,8 +3540,10 @@ dependencies = [
  "pdfcraft-fonts",
  "pdfcraft-model",
  "png 0.18.1",
+ "tempfile",
  "thiserror 2.0.21",
  "tiff",
+ "url",
 ]
 
 [[package]]

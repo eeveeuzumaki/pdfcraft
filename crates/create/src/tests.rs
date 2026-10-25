@@ -270,6 +270,18 @@ fn source_kind_tells_pdfs_images_and_text_apart() {
     // Text that merely starts like a BMP stays text; a truncated BMP header is not an image.
     assert_eq!(source_kind("b.txt", b"BMW drivers"), Some(SourceKind::Text));
     assert_eq!(source_kind("b.bmp", b"BM"), None);
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let zipish = [b"PK\x03\x04".as_slice(), &[0; 46], b"PK\x05\x06", &[0; 18]].concat();
+        assert_eq!(source_kind("a.docx", &zipish), Some(SourceKind::Office));
+        assert_eq!(source_kind("a.xlsx", &zipish), Some(SourceKind::Office));
+        assert_eq!(source_kind("a.PPTX", &zipish), Some(SourceKind::Office));
+        assert_eq!(source_kind("a.odt", &zipish), Some(SourceKind::Office));
+        assert_eq!(source_kind("truncated.docx", b"PK\x03\x04"), None);
+        assert_eq!(source_kind("malformed.docx", b"not a ZIP"), None);
+        assert_eq!(source_kind("macro.docm", b"PK\x03\x04"), None);
+    }
+    #[cfg(target_arch = "wasm32")]
     assert_eq!(source_kind("a.docx", b"PK\x03\x04"), None);
     assert_eq!(source_kind("", b""), None);
 }
