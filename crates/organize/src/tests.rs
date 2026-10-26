@@ -105,10 +105,7 @@ fn rotate_uses_inherited_rotation_and_round_trips() {
 fn rotate_rejects_non_quarter_turns_without_modifying_the_document() {
     let mut doc = open(fixture());
     for degrees in [1, 45, -45, 91, i64::MAX, i64::MIN] {
-        assert!(
-            matches!(rotate_pages(&mut doc, &[0, 1], degrees), Err(OrganizeError::Invalid(_))),
-            "invalid rotation {degrees} must be rejected"
-        );
+        assert!(matches!(rotate_pages(&mut doc, &[0, 1], degrees), Err(OrganizeError::Invalid(_))), "invalid rotation {degrees} must be rejected");
         assert!(!doc.is_modified(), "invalid rotation must not change the PDF");
     }
 }
