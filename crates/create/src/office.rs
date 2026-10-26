@@ -193,8 +193,7 @@ mod tests {
         }
         let mut single_disk = zipish;
         for field in [8, 10] {
-            single_disk[eocd + field..eocd + field + 2]
-                .copy_from_slice(&1u16.to_le_bytes());
+            single_disk[eocd + field..eocd + field + 2].copy_from_slice(&1u16.to_le_bytes());
         }
         assert!(looks_like_office(&single_disk));
     }
