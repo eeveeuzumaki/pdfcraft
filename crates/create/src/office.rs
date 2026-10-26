@@ -52,6 +52,23 @@ pub fn looks_like_office(bytes: &[u8]) -> bool {
         if field(4) != 0 || field(6) != 0 || field(8) != field(10) {
             return false;
         }
+        // ZIP64 uses sentinel values here; leave those archives to LibreOffice.
+        // For ordinary ZIPs, the central directory must end before the EOCD.
+        let field32 = |offset| {
+            bytes
+                .get(pos + offset..pos + offset + 4)
+                .and_then(|value| <[u8; 4]>::try_from(value).ok())
+                .map(u32::from_le_bytes)
+        };
+        let (Some(size), Some(offset)) = (field32(12), field32(16)) else {
+            return false;
+        };
+        if size != u32::MAX
+            && offset != u32::MAX
+            && u64::from(size) + u64::from(offset) > pos as u64
+        {
+            return false;
+        }
         let comment_len = field(20) as usize;
         pos + 22 + comment_len == bytes.len()
     })
@@ -196,6 +213,23 @@ mod tests {
             single_disk[eocd + field..eocd + field + 2].copy_from_slice(&1u16.to_le_bytes());
         }
         assert!(looks_like_office(&single_disk));
+    }
+
+    #[test]
+    fn reject_impossible_office_zip_central_directory_bounds() {
+        // A central directory cannot extend beyond the end-of-directory record.
+        let zipish = [b"PK\x03\x04".as_slice(), &[0; 46], b"PK\x05\x06", &[0; 18]].concat();
+        let eocd = zipish.len() - 22;
+        for (size, offset) in [(eocd as u32 + 1, 0), (0, eocd as u32 + 1), (eocd as u32, 1)] {
+            let mut invalid = zipish.clone();
+            invalid[eocd + 12..eocd + 16].copy_from_slice(&size.to_le_bytes());
+            invalid[eocd + 16..eocd + 20].copy_from_slice(&offset.to_le_bytes());
+            assert!(!looks_like_office(&invalid), "size {size}, offset {offset}");
+        }
+        let mut within_bounds = zipish;
+        within_bounds[eocd + 12..eocd + 16].copy_from_slice(&20u32.to_le_bytes());
+        within_bounds[eocd + 16..eocd + 20].copy_from_slice(&((eocd - 20) as u32).to_le_bytes());
+        assert!(looks_like_office(&within_bounds));
     }
 
     #[test]
