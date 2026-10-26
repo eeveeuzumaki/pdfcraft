@@ -33,13 +33,22 @@ pub fn format(name: &str) -> Option<&'static str> {
 }
 
 /// OOXML and ODF formats are ZIP containers, never plain text or a PDF header.
-/// Require both a local-file header and an end-of-central-directory marker so
-/// truncated PK-prefixed files are rejected before launching LibreOffice.
-/// This remains a quick check; LibreOffice performs full format validation.
+/// Require a local-file header and a complete ZIP end-of-central-directory
+/// record, including its declared comment, before launching LibreOffice.
+/// This is only a quick check; LibreOffice performs full format validation.
 pub fn looks_like_office(bytes: &[u8]) -> bool {
-    bytes.len() >= 52
-        && bytes.starts_with(b"PK\x03\x04")
-        && bytes[bytes.len().saturating_sub(65_557)..].windows(4).any(|window| window == b"PK\x05\x06")
+    if bytes.len() < 52 || !bytes.starts_with(b"PK\x03\x04") {
+        return false;
+    }
+    // ZIP comments can be up to 65,535 bytes; the EOCD record itself is 22.
+    let start = bytes.len().saturating_sub(65_557);
+    (start..=bytes.len() - 22).rev().any(|pos| {
+        if bytes.get(pos..pos + 4) != Some(b"PK\x05\x06".as_slice()) {
+            return false;
+        }
+        let comment_len = u16::from_le_bytes([bytes[pos + 20], bytes[pos + 21]]) as usize;
+        pos + 22 + comment_len == bytes.len()
+    })
 }
 
 /// Convert one Office document entirely on-device. The input is copied to a
@@ -144,6 +153,21 @@ mod tests {
         // A plausible ZIP must have an end-of-central-directory record.
         let zipish = [b"PK\x03\x04".as_slice(), &[0; 46], b"PK\x05\x06", &[0; 18]].concat();
         assert!(looks_like_office(&zipish));
+        // The complete EOCD record must end at the declared ZIP comment.
+        let mut with_comment = zipish.clone();
+        let len = with_comment.len();
+        with_comment[len - 2..].copy_from_slice(&3u16.to_le_bytes());
+        with_comment.extend_from_slice(b"abc");
+        assert!(looks_like_office(&with_comment));
+        assert!(!looks_like_office(&with_comment[..with_comment.len() - 1]));
+        assert!(!looks_like_office(&zipish[..zipish.len() - 1]));
+        let mut trailing_junk = zipish.clone();
+        trailing_junk.extend_from_slice(b"junk");
+        assert!(!looks_like_office(&trailing_junk));
+        let mut missing_comment = zipish.clone();
+        let len = missing_comment.len();
+        missing_comment[len - 2..].copy_from_slice(&3u16.to_le_bytes());
+        assert!(!looks_like_office(&missing_comment));
         assert!(!looks_like_office(b"PK\x03\x04"));
         assert!(!looks_like_office(b"PK\x03\x04archive"));
         assert!(!looks_like_office(b"%PDF-1.7"));
