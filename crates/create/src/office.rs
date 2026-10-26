@@ -46,7 +46,13 @@ pub fn looks_like_office(bytes: &[u8]) -> bool {
         if bytes.get(pos..pos + 4) != Some(b"PK\x05\x06".as_slice()) {
             return false;
         }
-        let comment_len = u16::from_le_bytes([bytes[pos + 20], bytes[pos + 21]]) as usize;
+        // Office ZIPs are single-disk archives. Reject split archives and
+        // inconsistent per-disk entry counts before invoking LibreOffice.
+        let field = |offset| u16::from_le_bytes([bytes[pos + offset], bytes[pos + offset + 1]]);
+        if field(4) != 0 || field(6) != 0 || field(8) != field(10) {
+            return false;
+        }
+        let comment_len = field(20) as usize;
         pos + 22 + comment_len == bytes.len()
     })
 }
@@ -172,6 +178,25 @@ mod tests {
         assert!(!looks_like_office(b"PK\x03\x04archive"));
         assert!(!looks_like_office(b"%PDF-1.7"));
         assert!(!looks_like_office(b"not a zip"));
+    }
+
+    #[test]
+    fn reject_split_zip_archives_before_invoking_libreoffice() {
+        // This lightweight preflight does not validate the central directory.
+        // It does require single-disk EOCD metadata with consistent counts.
+        let zipish = [b"PK\x03\x04".as_slice(), &[0; 46], b"PK\x05\x06", &[0; 18]].concat();
+        let eocd = zipish.len() - 22;
+        for field in [4, 6, 8, 10] {
+            let mut invalid = zipish.clone();
+            invalid[eocd + field..eocd + field + 2].copy_from_slice(&1u16.to_le_bytes());
+            assert!(!looks_like_office(&invalid), "invalid EOCD field at {field}");
+        }
+        let mut single_disk = zipish;
+        for field in [8, 10] {
+            single_disk[eocd + field..eocd + field + 2]
+                .copy_from_slice(&1u16.to_le_bytes());
+        }
+        assert!(looks_like_office(&single_disk));
     }
 
     #[test]
