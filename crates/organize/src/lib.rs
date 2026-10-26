@@ -143,11 +143,20 @@ fn check(indices: &[usize], n: usize) -> Result<(), OrganizeError> {
 pub fn rotate_pages(doc: &mut Document, indices: &[usize], degrees: i64) -> Result<(), OrganizeError> {
     let all = walk(doc)?;
     check(indices, all.len())?;
-    let delta = (degrees / 90) * 90;
+    if degrees % 90 != 0 {
+        return Err(OrganizeError::Invalid("page rotation must be a multiple of 90 degrees".into()));
+    }
+    // Reduce before adding: even valid multiples of 90 can overflow i64 when
+    // combined with an inherited rotation. Each selected page rotates once.
+    let delta = degrees.rem_euclid(360);
+    let mut seen = std::collections::HashSet::new();
     for &i in indices {
+        if !seen.insert(i) {
+            continue;
+        }
         let (page, inherited) = &all[i];
         let current = doc.get(*page).as_dict().and_then(|d| d.int(b"Rotate")).or_else(|| inherited.int(b"Rotate")).unwrap_or(0);
-        let new = (current + delta).rem_euclid(360);
+        let new = (current.rem_euclid(360) + delta).rem_euclid(360);
         doc.update_dict(*page, |d| d.set(b"Rotate".to_vec(), Object::Int(new)))?;
     }
     Ok(())

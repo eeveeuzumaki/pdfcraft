@@ -102,6 +102,37 @@ fn rotate_uses_inherited_rotation_and_round_trips() {
 }
 
 #[test]
+fn rotate_rejects_non_quarter_turns_without_modifying_the_document() {
+    let mut doc = open(fixture());
+    for degrees in [1, 45, -45, 91, i64::MAX, i64::MIN] {
+        assert!(matches!(rotate_pages(&mut doc, &[0, 1], degrees), Err(OrganizeError::Invalid(_))), "invalid rotation {degrees} must be rejected");
+        assert!(!doc.is_modified(), "invalid rotation must not change the PDF");
+    }
+}
+
+#[test]
+fn rotate_applies_each_selected_page_once_even_with_duplicate_indices() {
+    let mut doc = open(fixture());
+    rotate_pages(&mut doc, &[0, 0, 2, 2], 90).unwrap();
+    let doc = save_and_reopen(&doc);
+    for index in [0, 2] {
+        let page = pages(&doc).unwrap()[index].obj;
+        assert_eq!(doc.get(page).as_dict().and_then(|d| d.int(b"Rotate")), Some(180));
+    }
+}
+
+#[test]
+fn rotate_handles_very_large_valid_quarter_turns_without_overflow() {
+    let mut doc = open(fixture());
+    let degrees = (i64::MAX / 90) * 90;
+    rotate_pages(&mut doc, &[0], degrees).unwrap();
+    let doc = save_and_reopen(&doc);
+    let page = pages(&doc).unwrap()[0].obj;
+    let expected = (90 + degrees.rem_euclid(360)).rem_euclid(360);
+    assert_eq!(doc.get(page).as_dict().and_then(|d| d.int(b"Rotate")), Some(expected));
+}
+
+#[test]
 fn delete_keeps_inherited_attributes_on_survivors() {
     let mut doc = open(fixture());
     delete_pages(&mut doc, &[0]).unwrap();
