@@ -41,6 +41,14 @@ ignore = [
     # private-key operations use aws-lc-rs on native targets and are refused in the browser
     # (ADR-0009). Revisit when a fixed `rsa` ships.
     { id = "RUSTSEC-2023-0071", reason = "rsa is used for verification only (ADR-0009)" },
+    # The three *unmaintained*, not vulnerability, advisories below come exclusively from
+    # eframe -> egui-winit -> accesskit/AT-SPI accessibility support on Linux.
+    # Upstream zbus 6 consolidated these crates, but the pinned accessibility stack still
+    # requires zbus 5. Keep accessibility enabled; revisit when upstream can migrate.
+    # Do not ignore any other advisory, especially new security vulnerabilities.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant 5 via upstream Linux AT-SPI accessibility; unmaintained only, no safe upgrade yet" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names 4 via upstream Linux AT-SPI accessibility; unmaintained only, no safe upgrade yet" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive 5 via upstream Linux AT-SPI accessibility; unmaintained only, no safe upgrade yet" },
 ]
 
 # egui's default UI fonts (Ubuntu-Light, Hack, emoji-icon-font): font licences on the AGENTS.md
