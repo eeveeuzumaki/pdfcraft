@@ -54,19 +54,11 @@ pub fn looks_like_office(bytes: &[u8]) -> bool {
         }
         // ZIP64 uses sentinel values here; leave those archives to LibreOffice.
         // For ordinary ZIPs, the central directory must end before the EOCD.
-        let field32 = |offset| {
-            bytes
-                .get(pos + offset..pos + offset + 4)
-                .and_then(|value| <[u8; 4]>::try_from(value).ok())
-                .map(u32::from_le_bytes)
-        };
+        let field32 = |offset| bytes.get(pos + offset..pos + offset + 4).and_then(|value| <[u8; 4]>::try_from(value).ok()).map(u32::from_le_bytes);
         let (Some(size), Some(offset)) = (field32(12), field32(16)) else {
             return false;
         };
-        if size != u32::MAX
-            && offset != u32::MAX
-            && u64::from(size) + u64::from(offset) > pos as u64
-        {
+        if size != u32::MAX && offset != u32::MAX && u64::from(size) + u64::from(offset) > pos as u64 {
             return false;
         }
         let comment_len = field(20) as usize;
