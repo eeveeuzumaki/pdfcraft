@@ -187,6 +187,29 @@ fn cannot_delete_every_page_or_missing_pages() {
 }
 
 #[test]
+fn no_op_page_organization_preserves_the_original_document() {
+    // Empty delete/move requests and identity moves must not flatten a
+    // nested page tree or create an unnecessary incremental revision.
+    for indices in [vec![], vec![0], vec![1], vec![2], vec![0, 1], vec![0, 0]] {
+        let mut doc = open(fixture());
+        let to = if indices.is_empty() {
+            usize::MAX
+        } else if indices == [0, 1] || indices == [0, 0] {
+            0
+        } else {
+            indices[0]
+        };
+        move_pages(&mut doc, &indices, to).unwrap();
+        assert!(!doc.is_modified(), "identity move {indices:?} dirtied the document");
+        assert_eq!(labels(&doc), ["Page 1", "Page 2", "Page 3"]);
+    }
+    let mut doc = open(fixture());
+    delete_pages(&mut doc, &[]).unwrap();
+    assert!(!doc.is_modified(), "empty deletion dirtied the document");
+    assert_eq!(labels(&doc), ["Page 1", "Page 2", "Page 3"]);
+}
+
+#[test]
 fn move_pages_reorders() {
     let mut doc = open(fixture());
     move_pages(&mut doc, &[2], 0).unwrap();
