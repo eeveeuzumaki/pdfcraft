@@ -166,6 +166,9 @@ pub fn rotate_pages(doc: &mut Document, indices: &[usize], degrees: i64) -> Resu
 pub fn delete_pages(doc: &mut Document, indices: &[usize]) -> Result<(), OrganizeError> {
     let all = walk(doc)?;
     check(indices, all.len())?;
+    if indices.is_empty() {
+        return Ok(());
+    }
     let keep: Vec<(ObjRef, Dict)> = all.iter().enumerate().filter(|(i, _)| !indices.contains(i)).map(|(_, p)| p.clone()).collect();
     if keep.is_empty() {
         return Err(OrganizeError::WouldRemoveAllPages);
@@ -270,6 +273,9 @@ fn drop_widgets(doc: &mut Document, mut widgets: Vec<ObjRef>) -> Result<(), Orga
 pub fn move_pages(doc: &mut Document, indices: &[usize], to: usize) -> Result<(), OrganizeError> {
     let all = walk(doc)?;
     check(indices, all.len())?;
+    if indices.is_empty() {
+        return Ok(());
+    }
     let mut sorted = indices.to_vec();
     sorted.sort_unstable();
     sorted.dedup();
@@ -277,6 +283,11 @@ pub fn move_pages(doc: &mut Document, indices: &[usize], to: usize) -> Result<()
     let mut rest: Vec<(ObjRef, Dict)> = all.iter().enumerate().filter(|(i, _)| !sorted.contains(i)).map(|(_, p)| p.clone()).collect();
     let at = to.min(rest.len());
     rest.splice(at..at, moving);
+    // Avoid flattening the page tree or dirtying the document when the
+    // requested move leaves the existing order unchanged.
+    if rest.iter().map(|(r, _)| r).eq(all.iter().map(|(r, _)| r)) {
+        return Ok(());
+    }
     rebuild(doc, &rest)
 }
 
