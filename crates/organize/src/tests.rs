@@ -141,12 +141,23 @@ fn rotate_applies_each_selected_page_once_even_with_duplicate_indices() {
 
 #[test]
 fn rotate_handles_very_large_valid_quarter_turns_without_overflow() {
-    let mut doc = open(fixture());
     let degrees = (i64::MAX / 90) * 90;
-    rotate_pages(&mut doc, &[0], degrees).unwrap();
+    // The largest representable positive full turn must preserve the PDF,
+    // including an inherited rotation rather than writing a page override.
+    let mut unchanged = open(fixture());
+    rotate_pages(&mut unchanged, &[0], degrees).unwrap();
+    assert!(!unchanged.is_modified());
+    let page = pages(&unchanged).unwrap()[0].obj;
+    assert_eq!(unchanged.get(page).as_dict().and_then(|d| d.int(b"Rotate")), None);
+
+    // A nearby huge quarter turn still changes the effective rotation, with
+    // arithmetic reduced before addition to avoid overflow.
+    let mut doc = open(fixture());
+    let nonzero = degrees - 90;
+    rotate_pages(&mut doc, &[0], nonzero).unwrap();
     let doc = save_and_reopen(&doc);
     let page = pages(&doc).unwrap()[0].obj;
-    let expected = (90 + degrees.rem_euclid(360)).rem_euclid(360);
+    let expected = (90 + nonzero.rem_euclid(360)).rem_euclid(360);
     assert_eq!(doc.get(page).as_dict().and_then(|d| d.int(b"Rotate")), Some(expected));
 }
 
