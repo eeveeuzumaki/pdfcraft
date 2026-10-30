@@ -111,6 +111,24 @@ fn rotate_rejects_non_quarter_turns_without_modifying_the_document() {
 }
 
 #[test]
+fn rotate_noop_preserves_document_and_inherited_rotation() {
+    for (indices, degrees) in [(vec![], 0), (vec![], 90), (vec![0, 2], 0), (vec![0, 1, 2], 360), (vec![1], -720), (vec![0, 0], 1080)] {
+        let mut doc = open(fixture());
+        rotate_pages(&mut doc, &indices, degrees).unwrap();
+        assert!(!doc.is_modified(), "no-op rotation {indices:?} by {degrees} dirtied the PDF");
+        assert_eq!(labels(&doc), ["Page 1", "Page 2", "Page 3"]);
+        let page = pages(&doc).unwrap()[0].obj;
+        assert_eq!(doc.get(page).as_dict().and_then(|d| d.int(b"Rotate")), None, "inherited rotation must stay inherited");
+    }
+
+    // The no-op fast path must not bypass invalid page indices or angles.
+    let mut doc = open(fixture());
+    assert_eq!(rotate_pages(&mut doc, &[3], 360), Err(OrganizeError::NoSuchPage(3)));
+    assert!(matches!(rotate_pages(&mut doc, &[], 45), Err(OrganizeError::Invalid(_))));
+    assert!(!doc.is_modified());
+}
+
+#[test]
 fn rotate_applies_each_selected_page_once_even_with_duplicate_indices() {
     let mut doc = open(fixture());
     rotate_pages(&mut doc, &[0, 0, 2, 2], 90).unwrap();
@@ -123,12 +141,23 @@ fn rotate_applies_each_selected_page_once_even_with_duplicate_indices() {
 
 #[test]
 fn rotate_handles_very_large_valid_quarter_turns_without_overflow() {
-    let mut doc = open(fixture());
     let degrees = (i64::MAX / 90) * 90;
-    rotate_pages(&mut doc, &[0], degrees).unwrap();
+    // The largest representable positive full turn must preserve the PDF,
+    // including an inherited rotation rather than writing a page override.
+    let mut unchanged = open(fixture());
+    rotate_pages(&mut unchanged, &[0], degrees).unwrap();
+    assert!(!unchanged.is_modified());
+    let page = pages(&unchanged).unwrap()[0].obj;
+    assert_eq!(unchanged.get(page).as_dict().and_then(|d| d.int(b"Rotate")), None);
+
+    // A nearby huge quarter turn still changes the effective rotation, with
+    // arithmetic reduced before addition to avoid overflow.
+    let mut doc = open(fixture());
+    let nonzero = degrees - 90;
+    rotate_pages(&mut doc, &[0], nonzero).unwrap();
     let doc = save_and_reopen(&doc);
     let page = pages(&doc).unwrap()[0].obj;
-    let expected = (90 + degrees.rem_euclid(360)).rem_euclid(360);
+    let expected = (90 + nonzero.rem_euclid(360)).rem_euclid(360);
     assert_eq!(doc.get(page).as_dict().and_then(|d| d.int(b"Rotate")), Some(expected));
 }
 
