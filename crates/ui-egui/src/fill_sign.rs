@@ -89,6 +89,7 @@ impl SigDraft {
             self.image.is_some()
         } else if self.drawing {
             self.strokes.iter().any(|s| s.len() > 1)
+                && self.strokes.iter().flatten().all(|p| p.iter().all(|v| v.is_finite()))
         } else {
             !self.text.trim().is_empty()
                 && self.text.chars().take(pdfcraft_engine::MAX_SIGNATURE_CHARS + 1).count() <= pdfcraft_engine::MAX_SIGNATURE_CHARS
@@ -96,6 +97,11 @@ impl SigDraft {
     }
 
     pub fn saved(&self) -> Option<SavedSig> {
+        // A caller must not persist an empty, overlong, or non-finite mark,
+        // even if it bypasses the dialog's disabled Apply button.
+        if !self.ready() {
+            return None;
+        }
         if self.image_mode {
             self.image.clone().map(SavedSig::Image)
         } else if self.drawing {
@@ -726,4 +732,26 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn signature_draft_rejects_invalid_saved_marks() {
+        use super::{SavedSig, SigDraft};
+
+        let mut draft = SigDraft::default();
+        assert_eq!(draft.saved(), None);
+        draft.text = "   ".into();
+        assert_eq!(draft.saved(), None);
+        draft.text = "  Ada  ".into();
+        assert_eq!(draft.saved(), Some(SavedSig::Typed("Ada".into())));
+        draft.text = "x".repeat(pdfcraft_engine::MAX_SIGNATURE_CHARS + 1);
+        assert_eq!(draft.saved(), None);
+
+        draft.drawing = true;
+        draft.strokes = vec![vec![[0.1, 0.2]]];
+        assert_eq!(draft.saved(), None);
+        draft.strokes[0].push([0.3, 0.4]);
+        assert!(matches!(draft.saved(), Some(SavedSig::Drawn(_))));
+        draft.strokes[0][0][0] = f32::NAN;
+        assert_eq!(draft.saved(), None);
+    }
+
 }
