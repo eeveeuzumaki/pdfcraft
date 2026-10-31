@@ -149,6 +149,11 @@ pub fn rotate_pages(doc: &mut Document, indices: &[usize], degrees: i64) -> Resu
     // Reduce before adding: even valid multiples of 90 can overflow i64 when
     // combined with an inherited rotation. Each selected page rotates once.
     let delta = degrees.rem_euclid(360);
+    // A full turn (or no selected pages) changes neither effective rotation nor
+    // inherited page attributes; avoid an unnecessary incremental revision.
+    if delta == 0 || indices.is_empty() {
+        return Ok(());
+    }
     let mut seen = std::collections::HashSet::new();
     for &i in indices {
         if !seen.insert(i) {
