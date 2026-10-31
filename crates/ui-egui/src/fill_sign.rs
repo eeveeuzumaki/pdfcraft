@@ -88,8 +88,7 @@ impl SigDraft {
         if self.image_mode {
             self.image.is_some()
         } else if self.drawing {
-            self.strokes.iter().any(|s| s.len() > 1)
-                && self.strokes.iter().flatten().all(|p| p.iter().all(|v| v.is_finite()))
+            self.strokes.iter().any(|s| s.len() > 1) && self.strokes.iter().flatten().all(|p| p.iter().all(|v| v.is_finite()))
         } else {
             !self.text.trim().is_empty()
                 && self.text.chars().take(pdfcraft_engine::MAX_SIGNATURE_CHARS + 1).count() <= pdfcraft_engine::MAX_SIGNATURE_CHARS
@@ -753,5 +752,4 @@ mod tests {
         draft.strokes[0][0][0] = f32::NAN;
         assert_eq!(draft.saved(), None);
     }
-
 }
