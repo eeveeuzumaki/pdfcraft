@@ -91,8 +91,7 @@ impl SigDraft {
             self.strokes.iter().any(|s| s.len() > 1) && self.strokes.iter().flatten().all(|p| p.iter().all(|v| v.is_finite()))
         } else {
             let text = self.text.trim();
-            !text.is_empty()
-                && text.chars().take(pdfcraft_engine::MAX_SIGNATURE_CHARS + 1).count() <= pdfcraft_engine::MAX_SIGNATURE_CHARS
+            !text.is_empty() && text.chars().take(pdfcraft_engine::MAX_SIGNATURE_CHARS + 1).count() <= pdfcraft_engine::MAX_SIGNATURE_CHARS
         }
     }
 
