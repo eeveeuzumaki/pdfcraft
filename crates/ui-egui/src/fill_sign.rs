@@ -90,8 +90,8 @@ impl SigDraft {
         } else if self.drawing {
             self.strokes.iter().any(|s| s.len() > 1) && self.strokes.iter().flatten().all(|p| p.iter().all(|v| v.is_finite()))
         } else {
-            !self.text.trim().is_empty()
-                && self.text.chars().take(pdfcraft_engine::MAX_SIGNATURE_CHARS + 1).count() <= pdfcraft_engine::MAX_SIGNATURE_CHARS
+            let text = self.text.trim();
+            !text.is_empty() && text.chars().take(pdfcraft_engine::MAX_SIGNATURE_CHARS + 1).count() <= pdfcraft_engine::MAX_SIGNATURE_CHARS
         }
     }
 
@@ -731,6 +731,20 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn typed_signature_limit_counts_trimmed_unicode_characters() {
+        use super::{SavedSig, SigDraft};
+
+        let limit = pdfcraft_engine::MAX_SIGNATURE_CHARS;
+        let mut draft = SigDraft::default();
+        let text = "é".repeat(limit);
+        draft.text = format!("  {text}  ");
+        assert_eq!(draft.saved(), Some(SavedSig::Typed(text)));
+
+        draft.text = format!("  {}  ", "é".repeat(limit + 1));
+        assert_eq!(draft.saved(), None);
+    }
+
     #[test]
     fn signature_draft_rejects_invalid_saved_marks() {
         use super::{SavedSig, SigDraft};
