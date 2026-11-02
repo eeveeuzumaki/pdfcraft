@@ -197,6 +197,11 @@ pub fn typed(page: usize, at: [f64; 2], text: &str, author: &str) -> Edit {
 /// Place a saved signature (strokes normalised to a 0–1 box, y up) with its left edge at `at`,
 /// 150 pt wide.
 pub fn signature_at(page: usize, at: [f64; 2], strokes: &[Vec<[f32; 2]>], author: &str) -> Option<Edit> {
+    // Saved marks can come from older settings rather than the validated drawing pad.
+    // Never turn corrupt coordinates into a PDF annotation.
+    if !at.iter().all(|v| v.is_finite()) || !strokes.iter().flatten().all(|p| p.iter().all(|v| v.is_finite())) {
+        return None;
+    }
     let w = 150.0;
     let (min_y, max_y) = strokes.iter().flatten().fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p[1]), b.max(p[1])));
     if !min_y.is_finite() {
@@ -743,6 +748,21 @@ mod tests {
 
         draft.text = format!("  {}  ", "é".repeat(limit + 1));
         assert_eq!(draft.saved(), None);
+    }
+
+    #[test]
+    fn saved_drawn_signatures_reject_non_finite_placement() {
+        let strokes = vec![vec![[0.1, 0.2], [0.3, 0.4]]];
+        assert!(super::signature_at(0, [20.0, 100.0], &strokes, "").is_some());
+        for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            for coordinate in 0..2 {
+                let mut corrupt = strokes.clone();
+                corrupt[0][1][coordinate] = invalid;
+                assert!(super::signature_at(0, [20.0, 100.0], &corrupt, "").is_none());
+            }
+        }
+        assert!(super::signature_at(0, [f64::NAN, 100.0], &strokes, "").is_none());
+        assert!(super::signature_at(0, [20.0, f64::INFINITY], &strokes, "").is_none());
     }
 
     #[test]
