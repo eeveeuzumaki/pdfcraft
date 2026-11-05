@@ -218,6 +218,11 @@ impl PdfCraftApp {
         let committed = self.views.get_mut(i).and_then(|v| v.forms.committed.take());
         let typed = match (&edit, &committed) {
             (Edit::SetFieldValue { name, .. }, Some(draft)) => *name == draft.name,
+            // A checkbox/radio click batches the draft first, then the button change.
+            // If validation rejects the batch, restore that draft just as for Enter/Tab.
+            (Edit::Batch { edits, .. }, Some(draft)) => {
+                matches!(edits.first(), Some(Edit::SetFieldValue { name, .. }) if *name == draft.name)
+            }
             _ => false,
         };
         if self.apply_edit(edit) {
