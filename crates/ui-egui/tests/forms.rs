@@ -96,6 +96,61 @@ fn check_boxes_radios_and_choices() {
 }
 
 #[test]
+fn clicking_a_check_box_or_radio_commits_typing_and_survives_save() {
+    for (field, widget, selected) in [("agree", 0, "Yes"), ("size", 0, "S"), ("size", 1, "L")] {
+        let mut h = harness();
+        let before = value(&h, field);
+        click_field(&mut h, "name", 0);
+        h.event(egui::Event::Text("PdfCraft test".into()));
+        h.run_steps(2);
+        // No Enter or Tab: the button click must preserve the draft as well as select itself.
+        click_field(&mut h, field, widget);
+        assert_eq!(value(&h, "name"), ["PdfCraft test"], "typing before clicking {field}/{widget}");
+        assert_eq!(value(&h, field), [selected]);
+
+        h.state_mut().undo();
+        h.run_steps(2);
+        assert!(value(&h, "name").is_empty(), "one undo reverses the entire click");
+        assert_eq!(value(&h, field), before);
+        h.state_mut().redo();
+        h.run_steps(2);
+        assert_eq!(value(&h, "name"), ["PdfCraft test"]);
+        assert_eq!(value(&h, field), [selected]);
+
+        let dir = scratch(&format!("click-{field}-{widget}"));
+        let out = dir.join("saved.pdf");
+        h.state_mut().save_override = Some(out.to_string_lossy().into_owned());
+        assert!(h.state_mut().save_active(pdfcraft_ui_egui::SaveTarget::As));
+        assert_eq!(saved_value(&out, "name"), ["PdfCraft test"]);
+        assert_eq!(saved_value(&out, field), [selected]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[test]
+fn a_button_click_keeps_rejected_typing_and_does_not_toggle_the_button() {
+    for (field, widget) in [("agree", 0), ("size", 0), ("size", 1)] {
+        let mut h = harness();
+        assert!(h.state_mut().apply_edit(pdfcraft_engine::Edit::SetFieldScript {
+            name: "name".into(),
+            event: "validate".into(),
+            script: Some("if (event.value == 'Rejected') { event.rc = false; }".into()),
+        }));
+        h.run_steps(2);
+        let before = value(&h, field);
+        click_field(&mut h, "name", 0);
+        h.event(egui::Event::Text("Rejected".into()));
+        h.run_steps(2);
+        click_field(&mut h, field, widget);
+        assert!(value(&h, "name").is_empty());
+        assert_eq!(value(&h, field), before, "a refused draft blocks the button change");
+        let focus = h.state().views[0].forms.focus.as_ref().expect("the rejected draft stays editable");
+        assert_eq!(focus.name, "name");
+        assert_eq!(focus.text, "Rejected");
+    }
+}
+
+#[test]
 fn tabbing_into_a_filled_field_selects_it_so_typing_replaces() {
     let mut h = harness();
     click_field(&mut h, "country", 0);

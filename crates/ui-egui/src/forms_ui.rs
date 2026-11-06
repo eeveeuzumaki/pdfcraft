@@ -122,16 +122,17 @@ pub(crate) fn page_input(
         },
         FormFieldKind::Signature => view.sign.field = Some(f.name.clone()),
         FormFieldKind::CheckBox => {
-            view.forms.focus = None;
-            view.pending_edit = Some(Edit::SetFieldValue { name: f.name.clone(), value: FieldValue::Check(f.value.is_empty()) });
+            queue_button_edit(view, form, Edit::SetFieldValue { name: f.name.clone(), value: FieldValue::Check(f.value.is_empty()) });
         }
         FormFieldKind::Radio => {
-            view.forms.focus = None;
             let on = w.on_state.clone();
             // Clicking the selected button again turns it off unless the group forbids it.
             let value = if f.value.first() == on.as_ref() && !f.has(field_flags::NO_TOGGLE_TO_OFF) { None } else { on };
             if value.as_ref() != f.value.first() {
-                view.pending_edit = Some(Edit::SetFieldValue { name: f.name.clone(), value: FieldValue::Radio(value) });
+                queue_button_edit(view, form, Edit::SetFieldValue { name: f.name.clone(), value: FieldValue::Radio(value) });
+            } else {
+                // Even a button that stays selected commits the field being left.
+                commit(view, form);
             }
         }
         FormFieldKind::Text | FormFieldKind::Combo | FormFieldKind::List => {
@@ -142,6 +143,16 @@ pub(crate) fn page_input(
         }
     }
     true
+}
+
+/// Preserve the active draft and the button change in the single pending-edit slot. The
+/// engine applies a batch atomically: a rejected draft must not toggle the button either.
+fn queue_button_edit(view: &mut DocView, form: &[FormField], button: Edit) {
+    commit(view, form);
+    view.pending_edit = Some(match view.pending_edit.take() {
+        Some(draft) => Edit::Batch { label: button.label(), edits: vec![draft, button] },
+        None => button,
+    });
 }
 
 /// The edit the focused field's draft makes, if it differs from the field's value.
