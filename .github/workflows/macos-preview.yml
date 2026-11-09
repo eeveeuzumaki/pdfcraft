@@ -83,7 +83,7 @@ jobs:
           test "$(find dist/release -name '*.dmg' | wc -l | xargs)" -eq 1
           test "$(find dist/release -name '*.zip' | wc -l | xargs)" -eq 1
           cd dist/release
-          shasum -a 256 * > SHA256SUMS.txt
+          shasum -a 256 ./* > SHA256SUMS.txt
           {
             echo "### macOS ${{ matrix.label }} preview"
             echo "Build and packaging script succeeded."
