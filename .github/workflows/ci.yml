@@ -18,7 +18,9 @@ env:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Keep platform and security results intact when a newer commit is pushed.
+  # In particular, avoid cancelling queued macOS jobs needed for merge review.
+  cancel-in-progress: false
 
 jobs:
   test:
